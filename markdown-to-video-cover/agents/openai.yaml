@@ -1,0 +1,4 @@
+interface:
+  display_name: "Academic Video Poster"
+  short_description: "Create a separate academic promotional poster"
+  default_prompt: "Use $markdown-to-video-cover to create a promotional poster from this paper material."

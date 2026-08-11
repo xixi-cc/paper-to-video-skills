@@ -1,0 +1,54 @@
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+cookies.json
+**/cookies.json
+tts.json
+**/tts.json
+*.pem
+*.key
+
+# Generated paper and media artifacts
+video_frames/
+*.mp3
+*.wav
+!pdf-slides-to-video/assets/voices/voice-319-reference.wav
+*.mp4
+*.webm
+*.tts-cache.json
+*.video-cache.json
+pipeline-state.json
+upload-receipt.json
+
+# LaTeX build products
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc
+*.vrb
+*.xdv
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

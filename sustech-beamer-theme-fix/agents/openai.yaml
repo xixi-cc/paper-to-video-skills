@@ -1,0 +1,4 @@
+interface:
+  display_name: "SUSTech Beamer Theme Fix"
+  short_description: "Diagnose and repair SUSTech Beamer theme issues"
+  default_prompt: "Use $sustech-beamer-theme-fix to diagnose and repair this SUSTech Beamer compilation or rendering issue."

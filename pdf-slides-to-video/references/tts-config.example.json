@@ -1,0 +1,53 @@
+{
+  "backend": "indextts2",
+  "runtimes": {
+    "indextts2": {
+      "python": "~/.local/share/article-to-video/IndexTTS2/.venv/bin/python",
+      "repo": "~/.local/share/article-to-video/IndexTTS2",
+      "model": "~/.cache/article-to-video/models/IndexTTS-2",
+      "model_revision": "740dcaff396282ffb241903d150ac011cd4b1ede"
+    }
+  },
+  "pronunciation": {
+    "engine": "g2pw",
+    "python": "~/.local/share/article-to-video/g2pw/.venv/bin/python",
+    "model_dir": "~/.cache/article-to-video/models/G2PWModel",
+    "output_style": "indextts2",
+    "force_all_polyphones": true,
+    "fail_on_unknown": true
+  },
+  "voices": {
+    "indextts2": {
+      "mode": "zero_shot",
+      "preset_id": "319",
+      "reference_audio": "~/.config/article-to-video/voice/index-319-reference.wav"
+    }
+  },
+  "synthesis": {
+    "use_fp16": true,
+    "use_cuda_kernel": true,
+    "use_deepspeed": false,
+    "use_accel": true,
+    "use_torch_compile": true,
+    "native_acceleration_min_pages": 6,
+    "do_sample": true,
+    "top_p": 0.8,
+    "top_k": 30,
+    "temperature": 0.8,
+    "length_penalty": 0.0,
+    "num_beams": 1,
+    "repetition_penalty": 10.0,
+    "max_mel_tokens": 1500,
+    "max_text_tokens_per_segment": 120,
+    "audio_normalization_workers": 2,
+    "audio_normalization_max_in_flight": 4,
+    "emo_alpha": 0.8,
+    "seed": 42,
+    "speed": 1.0
+  },
+  "audio": {
+    "target_lufs": -16.0,
+    "true_peak_db": -1.5,
+    "output_sample_rate": 44100
+  }
+}

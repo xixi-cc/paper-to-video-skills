@@ -1,0 +1,86 @@
+% beamercolorthemesustech.sty
+% Theme author: 杨昊波 (Haobo Yang) — 2026 届计算机系博士 · github.com/yhbcode000 · yhbcode000@foxmail.com
+% COLOR-ONLY theme recoloring Madrid. Use on top of Madrid:
+%     \usetheme{Madrid}
+%     \usecolortheme{sustech}
+%
+% 调色板（专业学术蓝 + 低饱和绯红 + 灰绿/浅灰辅助 + 白底）
+%   主色 蓝   #1F4E79 / #2F6B8A / #3A708C —— 标题结构、section、框架、主图表
+%   强调 绯红 #B3263B / #D1495B           —— 关键词、结论、重要数字
+%   辅色 灰绿/浅灰 #526F61 / #E7EAEE / #F5F7FA —— 背景区块、辅助信息
+%   背景 白   #FFFFFF
+%   正文 深灰 #222B35
+\ProvidesPackage{beamercolorthemesustech}[2026/08/05 SUSTech academic palette for Madrid]
+
+\RequirePackage{xcolor}
+
+% --- 调色板 ------------------------------------------------------------------
+% 主色：专业学术蓝
+\definecolor{sustechblue}{HTML}{1F4E79}    % 深海军蓝（主标题 / 主结构）
+\definecolor{sustechblue2}{HTML}{2F6B8A}   % 标准学术蓝（结构线 / 层级）
+\definecolor{sustechblue3}{HTML}{3A708C}   % 中间蓝（辅助图表 / 页脚）
+\definecolor{sustechbluelt}{HTML}{DCEAF4}  % 极浅蓝（深底上的副标题文字）
+% 强调：低饱和绯红
+\definecolor{sustechred}{HTML}{B3263B}     % 深绯红（主强调）
+\definecolor{sustechred2}{HTML}{D1495B}    % 柔和红（次强调 / highlight）
+\definecolor{sustechredlt}{HTML}{F9E2E6}   % 浅红底（强调块体）
+% 兼容旧幻灯片中直接使用的旧色名，实际统一映射到新红色。
+\colorlet{sustechorange}{sustechred}
+\colorlet{sustechgold}{sustechred2}
+\colorlet{sustechorlt}{sustechredlt}
+% 辅色：灰绿 / 浅灰
+\definecolor{sustechgreen}{HTML}{526F61}   % 灰绿（冷静辅助）
+\definecolor{cardgrey}{HTML}{E7EAEE}       % 浅灰（分割 / 卡片背景）
+\definecolor{bgsoft}{HTML}{F5F7FA}         % 更浅背景灰（区块层次）
+% 中性文字
+\definecolor{sustechink}{HTML}{222B35}     % 正文深灰
+\definecolor{sustechgrey}{HTML}{66717E}    % 次级文字灰
+
+% --- 基础 --------------------------------------------------------------------
+\setbeamercolor{normal text}{fg=sustechink,bg=white}
+\setbeamercolor{structure}{fg=sustechblue}       % 结构默认走主蓝
+\setbeamercolor{alerted text}{fg=sustechred}
+\setbeamercolor{example text}{fg=sustechgreen}
+
+% --- Madrid 页脚 / 页眉三段色块（蓝色渐变：深 -> 标准 -> 柔和）----------------
+\setbeamercolor{palette primary}{fg=white,bg=sustechblue}
+\setbeamercolor{palette secondary}{fg=white,bg=sustechblue2}
+\setbeamercolor{palette tertiary}{fg=white,bg=sustechblue3}
+\setbeamercolor{palette quaternary}{fg=white,bg=sustechblue}
+\setbeamercolor{author in head/foot}{fg=white,bg=sustechblue}
+\setbeamercolor{title in head/foot}{fg=white,bg=sustechblue2}
+\setbeamercolor{date in head/foot}{fg=white,bg=sustechblue3}
+
+% --- 标题 / frametitle（主蓝结构）-------------------------------------------
+\setbeamercolor{title}{fg=white,bg=sustechblue}
+\setbeamercolor{subtitle}{fg=sustechbluelt}
+\setbeamercolor{frametitle}{fg=white,bg=sustechblue}
+\setbeamercolor{framesubtitle}{fg=sustechred}
+
+% --- 章节 / Part 标题（主蓝）------------------------------------------------
+\setbeamercolor{section title}{fg=sustechblue}
+\setbeamercolor{part title}{fg=sustechblue}
+\setbeamercolor{section in toc}{fg=sustechink}
+
+% --- 列表标记 / 编号（红色强调）---------------------------------------------
+\setbeamercolor{itemize item}{fg=sustechred}
+\setbeamercolor{itemize subitem}{fg=sustechred}
+\setbeamercolor{itemize subsubitem}{fg=sustechgrey}
+\setbeamercolor{enumerate item}{fg=sustechred}
+\setbeamercolor{enumerate subitem}{fg=sustechred}
+
+% --- 块 ----------------------------------------------------------------------
+% 普通 block：标准学术蓝标题（结构），极浅灰底
+\setbeamercolor{block title}{fg=white,bg=sustechblue2}
+\setbeamercolor{block body}{fg=sustechink,bg=bgsoft}
+% alertblock（callout 要点框）：红标题（强调），浅红底
+\setbeamercolor{block title alerted}{fg=white,bg=sustechred}
+\setbeamercolor{block body alerted}{fg=sustechink,bg=sustechredlt}
+% exampleblock：灰绿标题（辅助），浅灰底
+\setbeamercolor{block title example}{fg=white,bg=sustechgreen}
+\setbeamercolor{block body example}{fg=sustechink,bg=cardgrey}
+
+% --- 图注 --------------------------------------------------------------------
+\setbeamercolor{caption name}{fg=sustechred}
+
+\mode<all>

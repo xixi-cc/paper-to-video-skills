@@ -1,0 +1,4 @@
+interface:
+  display_name: "PDF Slides to Video"
+  short_description: "Turn verified slides into a narrated local video"
+  default_prompt: "Use $pdf-slides-to-video to create and verify a narrated video from these compiled slides."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper to Beamer"
+  short_description: "Build a verified technical Beamer presentation"
+  default_prompt: "Use $paper-to-beamer to create a technically complete Beamer presentation from this paper."

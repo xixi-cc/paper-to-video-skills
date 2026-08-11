@@ -1,0 +1,4 @@
+interface:
+  display_name: "Bilibili Video Uploader"
+  short_description: "Validate and publish academic videos to Bilibili"
+  default_prompt: "Use $bilibili-video-uploader to validate and publish this completed paper video."
