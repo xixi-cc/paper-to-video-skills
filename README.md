@@ -1,4 +1,4 @@
-# 论文分享视频 Skills — Codex 版
+# 论文分享工作流 Skills
 
 本仓库是论文到演示文稿工作流面向 Codex Desktop/WSL 的适配版本。项目以 Beamer 为主要幻灯片格式，并保留原有的 Skill、脚本、模板和资源目录结构。
 
@@ -43,9 +43,9 @@
 将仓库克隆到一个稳定位置：
 
 ```bash
-git clone https://github.com/xixi-cc/skill-repository-codex.git \
-  "$HOME/.local/share/skill-repository-codex"
-cd "$HOME/.local/share/skill-repository-codex"
+git clone https://github.com/xixi-cc/paper-to-video-skills.git \
+  "$HOME/.local/share/paper-to-video-skills"
+cd "$HOME/.local/share/paper-to-video-skills"
 ```
 
 ### 2. 让 Codex 发现这些 Skills
@@ -54,7 +54,7 @@ Codex 会从 `~/.agents/skills` 发现用户级 Skills，并支持符号链接�
 
 ```bash
 mkdir -p "$HOME/.agents/skills"
-repo_root="$HOME/.local/share/skill-repository-codex"
+repo_root="$HOME/.local/share/paper-to-video-skills"
 
 for skill in \
   bilibili-video-uploader \

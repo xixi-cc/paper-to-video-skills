@@ -10,7 +10,7 @@ the material.
 
 Suggested attribution:
 
-> Voice 319 reference audio, Skill Repository Codex project, licensed under
+> Voice 319 reference audio, Paper to Video Skills project, licensed under
 > CC BY 4.0.
 
 Voice 319 is a synthetic voice. The maintainer declares that this reference
