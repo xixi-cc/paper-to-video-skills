@@ -5,6 +5,6 @@ description = "Convert PDF slides to narrated MP4 video"
 requires-python = ">=3.12"
 dependencies = [
     "pdf2image>=1",
-    "pillow>=10",
+    "pillow>=12.3.0",
     "pymupdf>=1",
 ]
