@@ -18,7 +18,7 @@
 
 因此，本仓库是针对个人科研工作流制作的 Codex 适配与扩展版本，不是完全独立创作的原始 Skill 套件，也不代表原作者或其频道对本仓库提供官方背书。
 
-本仓库维护者独立新增或修改且不属于第三方内容的部分采用 [MIT 许可证](LICENSE)发布。第三方模板、原始 Skill 内容、模型、工具和服务仍适用各自的条款；安装、使用或再分发前请阅读
+原始 Skill 套件及本仓库维护者在其基础上新增或修改的内容，经原作者明确书面授权，采用 [MIT 许可证](LICENSE)发布。该授权允许修改、公开再分发并以 MIT 许可证发布；授权记录由维护者留存。另行列出的第三方模板、模型、工具和服务仍适用各自的条款；安装、使用或再分发前请阅读
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本仓库不包含模型、凭据、虚拟环境以及生成的论文或视频产物。合成语音 Voice 319 的参考音频采用单独的
 [CC BY 4.0 许可证](VOICE_LICENSE.md)发布，详情见其
 [可复现性说明](pdf-slides-to-video/references/voice-319.md)。
@@ -117,14 +117,14 @@ done
 | 内容 | 许可证或适用条款 |
 | --- | --- |
 | 本仓库维护者独立新增或修改的原创代码和文档 | [MIT 许可证](LICENSE) |
-| 来自“白拾的物理AI组会”的原始 Skill 套件及其衍生内容 | 原始压缩包未附整套软件许可证；公开再分发授权尚待确认，不能仅凭本仓库 MIT 许可证推定获得授权 |
+| 来自“白拾的物理AI组会”的原始 Skill 套件及其衍生内容 | [MIT 许可证](LICENSE)；原作者已明确书面授权修改、公开再分发并以 MIT 许可证发布，授权记录由维护者留存 |
 | `pdf-slides-to-video/assets/voices/voice-319-reference.wav` | [CC BY 4.0](VOICE_LICENSE.md) |
 | SUSTech 幻灯片模板 | MIT；再分发时须保留其[本地许可证](sustech-slides-template/LICENSE)和作者声明 |
 | 基于 Gemini 修改的 Beamer 海报主题 | MIT；参见[第三方许可证副本](third_party_licenses/GEMINI-MIT.txt) |
 | IndexTTS2 源码、模型权重及生成输出 | 适用上游单独的 Bilibili Model Use License，不属于本仓库 MIT 许可证的授权范围 |
 | 其他外部工具、模型、字体和服务 | 分别适用各自的上游条款 |
 
-再分发或部署前，请阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库级 MIT 许可证不会额外授予原始 Skill 内容、外部模型、服务、生成语音输出或上述范围以外第三方资源的使用权。在取得原作者的明确开源许可证或公开再分发授权之前，本仓库不应发布为公开仓库。
+再分发或部署前，请阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库级 MIT 许可证覆盖已获原作者授权的 Skill 套件及本仓库贡献者拥有权利的修改内容，但不会额外授予外部模型、服务、生成语音输出或上述范围以外第三方资源的使用权。
 
 ## Codex 运行约定
 

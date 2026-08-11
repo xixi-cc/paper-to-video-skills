@@ -11,13 +11,16 @@ Bilibili creator [白拾的物理AI组会](https://space.bilibili.com/98639326),
 referred to as "白拾的物理组会." This repository adapts that workflow for
 Codex Desktop, Codex CLI, WSL/Linux, and physics-plus-AI research use.
 
-The source archive available to this maintainer did not include a license for
-the Skill suite as a whole. Attribution alone does not grant permission to
-modify or redistribute copyrighted material. Public redistribution of the
-upstream Skill content therefore remains contingent on obtaining an explicit
-open-source license or other written redistribution permission from the
-original creator. The repository-level MIT license applies only to material
-for which the repository contributors hold the necessary rights.
+The source archive originally available to this maintainer did not include a
+license for the Skill suite as a whole. On 2026-08-11, the maintainer confirmed
+receipt of explicit written authorization from the original creator permitting
+modification, public redistribution, and distribution of the upstream and
+derived Skill content under this repository's MIT License. The maintainer
+retains the authorization record.
+
+This authorization applies to the original seven-Skill workflow. It does not
+replace the separate licenses or terms of the templates, models, services,
+fonts, tools, or voice assets identified below.
 
 ## SUSTech slides template
 
