@@ -20,14 +20,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import requests
-
 
 COOKIE_PATH = Path(
     os.environ.get("BILIBILI_COOKIE_FILE", Path.home() / ".bilibili" / "cookies.json")
 ).expanduser()
 
 UPLOAD_RECEIPT = "upload-receipt.json"
+
+
+def _requests() -> Any:
+    try:
+        import requests
+    except ImportError as error:
+        raise SystemExit(
+            "Bilibili verification requires requests; install the uploader "
+            "environment from ENVIRONMENT.md"
+        ) from error
+    return requests
 
 
 def _psutil() -> Any:
@@ -211,6 +220,7 @@ def verify_bvid(title: str, attempts: int = 3) -> tuple[str | None, str | None]:
     """Resolve an exact title through Creator Center without exposing cookies."""
     if not COOKIE_PATH.exists():
         return None, None
+    requests = _requests()
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Referer": "https://member.bilibili.com/platform/upload-manager/article",
