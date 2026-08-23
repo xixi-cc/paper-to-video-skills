@@ -10,6 +10,48 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+MODEL_ROUTES = {
+    "paper-to-beamer": (
+        "gpt-5.6-sol",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=beamer:gpt-5.6-sol:medium",
+    ),
+    "bilibili-video-uploader": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+    "markdown-to-video-cover": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+    "paper-download-arxiv-source": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+    "paper-to-video": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=video:gpt-5.6-terra:medium",
+    ),
+    "pdf-slides-to-video": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+    "pdf-to-markdown": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+    "sustech-beamer-theme-fix": (
+        "gpt-5.6-terra",
+        "medium",
+        "PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium",
+    ),
+}
 
 
 def parse_frontmatter(path: Path) -> dict[str, str]:
@@ -84,6 +126,52 @@ def main() -> int:
         if not description:
             errors.append(f"{relative}: missing description")
 
+        expected_route = MODEL_ROUTES.get(name)
+        if expected_route is None:
+            errors.append(f"{relative}: missing required model route")
+        else:
+            expected_model, expected_effort, expected_marker = expected_route
+            if metadata.get("stage_model") != expected_model:
+                errors.append(
+                    f"{relative}: stage_model must be {expected_model!r}"
+                )
+            if metadata.get("stage_reasoning_effort") != expected_effort:
+                errors.append(
+                    f"{relative}: stage_reasoning_effort must be "
+                    f"{expected_effort!r}"
+                )
+            skill_text = skill_file.read_text(encoding="utf-8")
+            routing_headings = (
+                "## Required model route",
+                "## Required staged model route",
+            )
+            if not any(heading in skill_text for heading in routing_headings):
+                errors.append(f"{relative}: missing model-routing instructions")
+            if expected_marker not in skill_text:
+                errors.append(f"{relative}: missing recursion-safe worker marker")
+            if name in {"paper-to-video", "sustech-beamer-theme-fix"}:
+                if metadata.get("beamer_quality_model") != "gpt-5.6-sol":
+                    errors.append(
+                        f"{relative}: beamer_quality_model must be "
+                        "'gpt-5.6-sol'"
+                    )
+                if (
+                    metadata.get("beamer_quality_reasoning_effort")
+                    != "medium"
+                ):
+                    errors.append(
+                        f"{relative}: beamer_quality_reasoning_effort must be "
+                        "'medium'"
+                    )
+                beamer_marker = (
+                    "PAPER_TO_VIDEO_STAGE_WORKER="
+                    "beamer:gpt-5.6-sol:medium"
+                )
+                if beamer_marker not in skill_text:
+                    errors.append(
+                        f"{relative}: missing Sol Beamer-stage worker marker"
+                    )
+
         agent_file = skill_file.parent / "agents" / "openai.yaml"
         if not agent_file.is_file():
             errors.append(f"{agent_file.relative_to(ROOT)}: missing UI metadata")
@@ -101,7 +189,10 @@ def main() -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    print(f"Validated {len(skill_files)} Skills and their agents/openai.yaml files.")
+    print(
+        f"Validated {len(skill_files)} Skills, model routes, and "
+        "agents/openai.yaml files."
+    )
     return 0
 
 

@@ -1,11 +1,35 @@
 ---
 name: pdf-slides-to-video
 description: Convert compiled Beamer PDF slides into a narrated Chinese or English MP4 with page-aligned scripts, local IndexTTS2 voice cloning, cover art, and metadata. Use when Codex must turn a local slide deck into a lecture or paper-explanation video and verify page-to-audio alignment.
+metadata:
+  stage_model: gpt-5.6-terra
+  stage_reasoning_effort: medium
 ---
 
 # PDF Slides to Narrated Video
 
 Operate on a paper directory containing `slides-beamer/main.tex` and `slides-beamer/main.pdf`. Keep generated media under `<paper-dir>/video/`.
+
+## Required model route
+
+Run this stage in exactly one model-routed worker. If the current delegated
+prompt contains `PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium`,
+execute the Skill directly and do not delegate again. Otherwise, before doing
+stage work, spawn one subagent with model `gpt-5.6-terra` and reasoning effort
+`medium`. In its prompt, require this Skill, include the marker above, and carry
+forward the paper paths, user requirements, and current authorization
+boundaries. Wait for that worker and return its result; the parent may verify
+the handoff but must not redo the stage. If the exact worker profile cannot
+start, stop and report that routing failure instead of silently inheriting or
+falling back to the parent model.
+
+This Terra worker may parse, deterministically compile, or rasterize an existing
+Beamer deck and repair mechanical TeX, path, font, macro, rendering, or cache
+failures. It must not author or approve presentation content. If the deck needs
+scientific, narrative, textual, equation, figure, information-density, or
+content-related layout judgment, stop before narration or TTS and route that
+work to a `gpt-5.6-sol` medium worker using `paper-to-beamer`. Resume Terra only
+after the exact resulting PDF passes the Beamer content-quality gate.
 
 ## Environment
 

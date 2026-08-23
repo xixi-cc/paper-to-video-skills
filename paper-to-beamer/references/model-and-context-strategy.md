@@ -6,22 +6,25 @@ prompt.
 
 ## Route by judgment load
 
-- Use the strongest available reasoning model for scientific interpretation,
-  derivation checks, conflicting evidence, claim calibration, and the final
-  narration-hidden cold read.
-- A balanced model is appropriate for bounded manifest revisions when the
-  evidence locators, required changes, and validation criteria are already
-  explicit.
-- Use a high-throughput model only for low-risk classification or normalization
-  whose output is completely checked by a deterministic schema or script.
+- Use `gpt-5.6-sol` with `medium` reasoning only for presentation-Beamer content
+  quality: scientific interpretation, derivation and claim checks, narrative
+  structure, slide text, equations, figure choice, information density,
+  content-related layout, and the narration-hidden cold read.
+- Use `gpt-5.6-terra` with `medium` reasoning for source intake, PDF extraction,
+  deterministic rendering or compilation of unchanged content, mechanical
+  theme/path/font/macro repair, narration, TTS, video assembly, promotional
+  posters, and authorized upload handling.
 - Prefer a script over any model for downloading, hashing, archive extraction,
   page counting, file conversion, compilation, rendering, cache decisions, and
   media validation.
 
-Do not split one paper's scientific authorship across models merely to reduce
-headline token cost. Style drift, duplicated context, and a second review can
-cost more than one coherent pass. Escalate after a failed evidence, equation,
-or cold-read gate rather than using maximum reasoning for every mechanical step.
+Do not split one paper's scientific authorship across multiple workers. The
+Sol owns only the content-quality gate. Terra may consume, compile, render, and
+package its canonical artifacts without another Sol pass while their hashes and
+review evidence remain current. A mixed Skill such as `paper-to-video` invokes
+Sol only when that gate is missing, stale, or fails. Change these defaults only
+after a same-paper quality, latency, retry, and token comparison demonstrates a
+better route.
 
 ## Keep context evidence-shaped
 

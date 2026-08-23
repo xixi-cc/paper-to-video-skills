@@ -1,12 +1,28 @@
 ---
 name: paper-download-arxiv-source
 description: Download a versioned or unversioned arXiv paper source package, safely extract TeX and original figures, and write a hash-backed provenance receipt. Use when a paper-to-Beamer workflow starts from an arXiv URL or ID or needs higher-fidelity source assets than PDF extraction.
+metadata:
+  stage_model: gpt-5.6-terra
+  stage_reasoning_effort: medium
 ---
 
 # Download arXiv Source
 
 Fetch an arXiv e-print into a paper workspace without modifying an existing
 source tree implicitly.
+
+## Required model route
+
+Run this stage in exactly one model-routed worker. If the current delegated
+prompt contains `PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium`,
+execute the Skill directly and do not delegate again. Otherwise, before doing
+stage work, spawn one subagent with model `gpt-5.6-terra` and reasoning effort
+`medium`. In its prompt, require this Skill, include the marker above, and carry
+forward the input paths, user requirements, and current authorization
+boundaries. Wait for that worker and return its result; the parent may verify
+the handoff but must not redo the stage. If the exact worker profile cannot
+start, stop and report that routing failure instead of silently inheriting or
+falling back to the parent model.
 
 ## Run
 

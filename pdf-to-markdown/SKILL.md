@@ -1,11 +1,27 @@
 ---
 name: pdf-to-markdown
 description: Convert an academic PDF or supported office document into structured Markdown with equations, tables, and extracted figures. Use when Codex needs machine-readable structure and no matching TeX source is available or PDF extraction remains useful; do not replace visual PDF verification.
+metadata:
+  stage_model: gpt-5.6-terra
+  stage_reasoning_effort: medium
 ---
 
 # PDF to Markdown
 
 Convert a user-supplied file with the bundled `convert.py`. Keep the source file unchanged. In an arXiv workflow, prefer matching TeX source for formulas, tables, and original figures; use Markdown as a structured aid rather than the sole paper representation.
+
+## Required model route
+
+Run this stage in exactly one model-routed worker. If the current delegated
+prompt contains `PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium`,
+execute the Skill directly and do not delegate again. Otherwise, before doing
+stage work, spawn one subagent with model `gpt-5.6-terra` and reasoning effort
+`medium`. In its prompt, require this Skill, include the marker above, and carry
+forward the input paths, user requirements, and current authorization
+boundaries. Wait for that worker and return its result; the parent may verify
+the handoff but must not redo the stage. If the exact worker profile cannot
+start, stop and report that routing failure instead of silently inheriting or
+falling back to the parent model.
 
 ## Workflow
 

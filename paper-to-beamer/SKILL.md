@@ -1,12 +1,28 @@
 ---
 name: paper-to-beamer
 description: Turn an academic paper into a compiled, visually reviewed SUSTech Beamer deck with source-linked claims and faithful equations and figures.
+metadata:
+  stage_model: gpt-5.6-sol
+  stage_reasoning_effort: medium
 ---
 
 # Paper to Beamer
 
 Create Beamer as the editable deliverable. Narration, video, and publication
 metadata are outside this Skill.
+
+## Required model route
+
+Run this stage in exactly one model-routed worker. If the current delegated
+prompt contains `PAPER_TO_VIDEO_STAGE_WORKER=beamer:gpt-5.6-sol:medium`,
+execute the Skill directly and do not delegate again. Otherwise, before doing
+paper analysis or editing files, spawn one subagent with model `gpt-5.6-sol`
+and reasoning effort `medium`. In its prompt, require this Skill, include the
+marker above, and carry forward the paper paths, user requirements, and current
+authorization boundaries. Wait for that worker and return its result; the
+parent may verify the handoff but must not redo Beamer authorship. If the exact
+worker profile cannot start, stop and report that routing failure instead of
+silently inheriting or falling back to the parent model.
 
 ## Read the paper
 

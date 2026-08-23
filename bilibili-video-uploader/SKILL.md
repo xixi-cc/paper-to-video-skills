@@ -1,12 +1,29 @@
 ---
 name: bilibili-video-uploader
 description: Validate metadata and upload a completed paper-explanation MP4 to Bilibili through biliup. Use only when the user explicitly asks Codex to upload or publish an already generated video.
+metadata:
+  stage_model: gpt-5.6-terra
+  stage_reasoning_effort: medium
 ---
 
 # Bilibili video uploader
 
 Upload only after an explicit publication request in the current conversation.
 Video generation alone is not authorization.
+
+## Required model route
+
+Run this stage in exactly one model-routed worker. If the current delegated
+prompt contains `PAPER_TO_VIDEO_STAGE_WORKER=terra:gpt-5.6-terra:medium`,
+execute the Skill directly and do not delegate again. Otherwise, before doing
+stage work, spawn one subagent with model `gpt-5.6-terra` and reasoning effort
+`medium`. In its prompt, require this Skill, include the marker above, and carry
+forward the exact paper paths, explicit publication authorization (if any), and
+all current authorization boundaries. Wait for that worker and return its
+result; the parent may verify the handoff but must not redo the stage. If the
+exact worker profile cannot start, stop and report that routing failure instead
+of silently inheriting or falling back to the parent model. Delegation never
+creates upload authorization.
 
 ## Inputs
 
