@@ -1,0 +1,37 @@
+\documentclass[aspectratio=1610,10pt]{ctexbeamer}
+\usetheme{sustech}
+\usepackage{mwe}
+
+\title[Semantic frames]{语义页面宏回归样例}
+\author[Codex QA]{Codex QA}
+\institute[SUSTech]{SUSTech template validation}
+\date{2026-08-23}
+
+\begin{document}
+
+\begin{frame}[plain,c]{论文图页：趋势与结论保持同屏}
+  \paperfigure{example-image-a}{2b}
+    {固定密度并升高温度；有序区在临界温度处连续终止。}
+    {该边界支持连续相变，而非一级跃迁。}
+\end{frame}
+
+\begin{frame}{方程推导页：条件、步骤与物理意义}
+  \equationderivation
+    {$k\ell\ll1$ 且处于线性响应区；边界项消失。}
+    {\partial_t\rho &= -\nabla\!\cdot J \\
+     &= D\nabla^2\rho}
+    {$J=-D\nabla\rho$ 闭合守恒律，并固定扩散项符号。}
+    {这些假设把动力学约化为稳定的扩散模。}
+\end{frame}
+
+\begin{frame}{基线比较页：只比较匹配预算的结果}
+  \baselinecomparison
+    {相同数据集、划分、骨干网络与评估预算。}
+    {Top-1 准确率}
+    {$81.2\%$}
+    {$84.7\%$}
+    {$+3.5$ 个百分点}
+    {在匹配预算后，本文方法仍保持明确增益。}
+\end{frame}
+
+\end{document}

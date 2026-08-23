@@ -3,53 +3,60 @@ name: bilibili-video-uploader
 description: Validate metadata and upload a completed paper-explanation MP4 to Bilibili through biliup. Use only when the user explicitly asks Codex to upload or publish an already generated video.
 ---
 
-# Bilibili Video Uploader
+# Bilibili video uploader
 
-Uploading is an external, consequential action. Never upload merely because a video was generated.
+Upload only after an explicit publication request in the current conversation.
+Video generation alone is not authorization.
 
-## Preconditions
+## Inputs
 
-1. Require an explicit upload request in the current conversation.
-2. Locate `<paper-dir>/video/video_meta.json`, at least one MP4, and
-   `video/cover.png`. Require `cover_path` to be `cover.png`. When
-   `video/video_frames/slide_001.png` exists, refresh `cover.png` from that
-   rendered Beamer title page before the dry run. Never fall back to
-   `poster/poster.png` or another figure.
-3. Validate and log title, category, tags, description, copyright, source, cover, and selected MP4 before submission. Make the first nonempty line exactly one Chinese sentence in the form `一句话概述：本文……；其重要性在于……。`, stating both what the paper did and why it matters. Follow it with one or two plain-language Chinese sentences introduced by “本视频”, “本期”, “这期”, or “本次视频”; briefly state the research question and what the viewer will learn. Then include the complete paper title and available venue, DOI, or canonical link. Reject descriptions containing only bibliographic metadata. An explicit request to upload, publish, or run `bilibili` mode authorizes the submission; do not require a second confirmation.
-4. Keep cookies at `~/.bilibili/cookies.json`. Never print, copy into the repository, or commit cookie contents.
-5. Reuse the existing sibling `.venv` containing `biliup>=1.2`, or set `BILIUP_PYTHON` to another isolated runtime. Install only when neither reusable runtime exists; never reinstall per paper or install into system Python.
+Under `<paper-dir>/video/`, require:
 
-## Commands
+- a completed MP4;
+- `cover.png`, derived from the rendered Beamer title page;
+- `video_meta.json` with a nonempty title, tag list, and description.
 
-Resolve this skill directory at runtime:
+The description is free-form. Prefer a concise explanation plus the paper title
+and canonical link, but do not enforce a sentence template or exact paragraph
+shape. Validate copyright/source consistency. Keep cookies only at
+`~/.bilibili/cookies.json` and never print their contents.
+
+## Upload
+
+Resolve this Skill directory at runtime, then preview before submission:
 
 ```bash
-python "$SKILL_DIR/scripts/upload.py" --login
 python "$SKILL_DIR/scripts/upload.py" PAPER_DIR --dry-run
 python "$SKILL_DIR/scripts/upload.py" PAPER_DIR --confirm-upload
 ```
 
-For an explicitly requested replacement batch, withdraw only from an exact
-audit plus a Creator Center snapshot. Preview first, then apply with a durable
-receipt. Never accept an unbounded "all submissions" target:
+The uploader owns `video/upload-receipt.json`. It fingerprints the video,
+cover, and metadata; a matching verified receipt prevents duplicate submission.
+If a command may have succeeded but no BVID is known, verify the exact title and
+do not automatically retry. Use `--verify-only` to complete that verification.
+
+On authentication failure, ask the user to run:
 
 ```bash
-python "$SKILL_DIR/scripts/withdraw_batch.py" AUDIT_JSON SNAPSHOT_JSON \
-  --indices 3-20 --receipt WITHDRAWAL_RECEIPT_JSON
-python "$SKILL_DIR/scripts/withdraw_batch.py" AUDIT_JSON SNAPSHOT_JSON \
-  --indices 3-20 --receipt WITHDRAWAL_RECEIPT_JSON --apply
+python "$SKILL_DIR/scripts/upload.py" --login
 ```
 
-The withdrawal tool must live-query Creator Center and require exact BVID and
-title matches before any deletion. Process serially, record every response
-atomically, rescan after the batch, and keep protected/non-target submissions
-untouched.
+## biliup locks
 
-`--dry-run` must print the resolved media and sanitized command without contacting the upload endpoint. After a successful dry-run, use `--confirm-upload` for the actual upload without pausing for another confirmation.
+Diagnosis is read-only. Cleanup terminates only biliup processes holding a
+discovered lock, waits for them to exit, and then removes unheld locks:
 
-## Validation and reporting
+```bash
+python "$SKILL_DIR/scripts/upload.py" --diagnose-locks
+python "$SKILL_DIR/scripts/upload.py" --cleanup-locks --confirm-cleanup
+```
 
-- Reject missing files, empty tags, titles over the platform limit, a missing one-sentence work-and-importance summary, missing simple introductions, or invalid copyright/source combinations. Print the complete description in every dry-run plan.
-- Do not delete locks or terminate processes automatically. Diagnostics must remain read-only unless the user explicitly authorizes cleanup.
-- On authentication failure, ask the user to run QR login; never request cookie text.
-- On success, return the BV identifier and URL. On failure, classify authentication, duplicate, size, rate-limit, or unknown errors without automatic retries that could duplicate a submission.
+Never trigger cleanup merely because an upload failed. Use `--force-kill` only
+after explicit authorization when graceful termination fails.
+
+For explicitly scoped withdrawals, preview `scripts/withdraw_batch.py` first,
+require exact BVID and title matches, then apply with a durable receipt. Never
+use an unbounded target or an actual upload/withdrawal as a smoke test.
+
+Return the verified BVID and URL. Classify authentication, duplicate, size,
+rate-limit, and unknown failures without automatic submission retries.

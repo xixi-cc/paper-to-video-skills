@@ -147,7 +147,7 @@ dependencies in a separate environment:
 ```bash
 uv venv bilibili-video-uploader/.venv --python 3.11
 uv pip install --python bilibili-video-uploader/.venv/bin/python \
-  "biliup>=1.2" requests
+  "biliup>=1.2" requests "psutil>=5.9"
 ```
 
 Store cookies outside the repository:

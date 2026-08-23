@@ -1,0 +1,4 @@
+interface:
+  display_name: "Paper to Video"
+  short_description: "Build narrated local videos from completed Beamer decks"
+  default_prompt: "Use $paper-to-video to build verified local videos from these completed Beamer decks."

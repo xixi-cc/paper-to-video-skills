@@ -56,7 +56,7 @@ class PipelineOverlapTests(unittest.TestCase):
     def test_first_paper_enters_post_before_tts_worker_returns(self) -> None:
         batch = load_module(
             "test_batch",
-            SUITE_DIR / "pdf-to-bilibili" / "scripts" / "batch.py",
+            SUITE_DIR / "paper-to-video" / "scripts" / "batch.py",
         )
         post_started = threading.Event()
         overlap_observed = threading.Event()
@@ -79,7 +79,7 @@ class PipelineOverlapTests(unittest.TestCase):
         def fake_post(context, tts_results, segment_executor, ffmpeg_semaphore):
             if context["paper_id"] == "paper-a":
                 post_started.set()
-            return {"paper": context["root"].name, "status": "qa_passed"}
+            return {"paper": context["root"].name, "status": "video_done"}
 
         def fake_tts(backend, tasks, config_path=None, on_event=None):
             assert on_event is not None
@@ -106,7 +106,6 @@ class PipelineOverlapTests(unittest.TestCase):
         fake_backend.load_tts_config = lambda path=None: {
             "synthesis": {"audio_normalization_workers": 1}
         }
-        fake_backend.resolve_backend = lambda backend=None, config_path=None: "indextts2"
         fake_backend.run_local_tts_batch = fake_tts
 
         with tempfile.TemporaryDirectory() as temp_dir, patch.dict(
@@ -120,9 +119,7 @@ class PipelineOverlapTests(unittest.TestCase):
                 post_workers=1,
                 latex_workers=1,
                 ffmpeg_workers=3,
-                backend="indextts2",
                 config_path=None,
-                upload=False,
                 force_compile=False,
             )
 
@@ -133,6 +130,33 @@ class PipelineOverlapTests(unittest.TestCase):
         )
         self.assertEqual(summary["resources"]["ffmpeg_workers_reserved_for_tts"], 1)
         self.assertEqual(summary["resources"]["ffmpeg_workers_available_to_post"], 2)
+
+    def test_narrations_json_requires_exact_page_coverage(self) -> None:
+        batch = load_module(
+            "test_batch_narration",
+            SUITE_DIR / "paper-to-video" / "scripts" / "batch.py",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            frame_dir = root / "frames"
+            frame_dir.mkdir()
+            slides = {
+                "slide_001": frame_dir / "slide_001.png",
+                "slide_002": frame_dir / "slide_002.png",
+            }
+            for path in slides.values():
+                path.write_bytes(b"png")
+            narration_path = root / "narrations.json"
+            narration_path.write_text(
+                '{"slide_001": "第一页", "slide_002": "第二页"}',
+                encoding="utf-8",
+            )
+            result = batch.write_narration_files(narration_path, frame_dir, slides)
+            self.assertEqual(result["pages"], 2)
+            self.assertEqual((frame_dir / "slide_002.txt").read_text().strip(), "第二页")
+            narration_path.write_text('{"slide_001": "第一页"}', encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "coverage mismatch"):
+                batch.write_narration_files(narration_path, frame_dir, slides)
 
 
 if __name__ == "__main__":

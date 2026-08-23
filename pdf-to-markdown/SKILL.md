@@ -1,11 +1,11 @@
 ---
 name: pdf-to-markdown
-description: Convert an academic PDF or supported office document into structured Markdown with equations, tables, and extracted figures. Use when Codex needs a machine-readable paper before creating Beamer slides, narration, or a poster.
+description: Convert an academic PDF or supported office document into structured Markdown with equations, tables, and extracted figures. Use when Codex needs machine-readable structure and no matching TeX source is available or PDF extraction remains useful; do not replace visual PDF verification.
 ---
 
 # PDF to Markdown
 
-Convert a user-supplied file with the bundled `convert.py`. Keep the source file unchanged.
+Convert a user-supplied file with the bundled `convert.py`. Keep the source file unchanged. In an arXiv workflow, prefer matching TeX source for formulas, tables, and original figures; use Markdown as a structured aid rather than the sole paper representation.
 
 ## Workflow
 

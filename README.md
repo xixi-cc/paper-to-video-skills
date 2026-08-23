@@ -26,15 +26,18 @@
 ## 工作流
 
 ```text
-论文 PDF
-  → pdf-to-markdown
+论文 PDF ───────────────→ 视觉检查；按需转 Markdown
+arXiv URL/ID → PDF + TeX 源码、原始图片和来源回执
+                      ↓
   → paper-to-beamer
   → pdf-slides-to-video
   → 可选：markdown-to-video-cover 海报
   → 可选：bilibili-video-uploader 投稿
 ```
 
-`pdf-to-bilibili` 负责组织完整工作流；`sustech-beamer-theme-fix` 用于诊断 Beamer 主题和编译问题。
+`paper-to-video` 负责将已完成的 Beamer 幻灯片组装为本地视频；
+`sustech-beamer-theme-fix` 用于诊断 Beamer 主题和编译问题。投稿始终由
+`bilibili-video-uploader` 单独处理。
 
 ## 快速安装
 
@@ -50,7 +53,7 @@ cd "$HOME/.local/share/paper-to-video-skills"
 
 ### 2. 让 Codex 发现这些 Skills
 
-Codex 会从 `~/.agents/skills` 发现用户级 Skills，并支持符号链接形式的 Skill 目录。下面的命令会链接全部 7 个 Skills，同时避免复制它们共用的脚本、模板和资源：
+Codex 会从 `~/.agents/skills` 发现用户级 Skills，并支持符号链接形式的 Skill 目录。下面的命令会链接全部 8 个 Skills，同时避免复制它们共用的脚本、模板和资源：
 
 ```bash
 mkdir -p "$HOME/.agents/skills"
@@ -59,9 +62,10 @@ repo_root="$HOME/.local/share/paper-to-video-skills"
 for skill in \
   bilibili-video-uploader \
   markdown-to-video-cover \
+  paper-download-arxiv-source \
   paper-to-beamer \
   pdf-slides-to-video \
-  pdf-to-bilibili \
+  paper-to-video \
   pdf-to-markdown \
   sustech-beamer-theme-fix
 do
@@ -91,11 +95,12 @@ done
 保持源 PDF 不变，并将输出写到论文旁边的独立目录。
 ```
 
-配置好 TeX、FFmpeg、Poppler、IndexTTS2 和 G2PW 后，可以运行完整的分阶段工作流：
+配置好 TeX、FFmpeg、Poppler、IndexTTS2 和 G2PW 后，可以将已审核的
+Beamer 幻灯片转成视频：
 
 ```text
-对 /absolute/path/to/paper.pdf 使用 $pdf-to-bilibili。
-生成并验证 Markdown、Beamer 幻灯片和配音视频，但不要投稿到哔哩哔哩。
+对 /absolute/path/to/paper-directory 使用 $paper-to-video。
+从已编译的 Beamer PDF 和 video/narrations.json 生成并验证配音视频。
 ```
 
 投稿始终是可选操作，只有用户明确要求上传或发布时才会执行。
@@ -104,12 +109,13 @@ done
 
 | Skill | 功能 |
 | --- | --- |
+| `paper-download-arxiv-source` | 下载并安全解包 arXiv TeX/原始图片，记录哈希来源契约。 |
 | `pdf-to-markdown` | 从论文中提取结构化 Markdown、公式、表格和图片。 |
 | `paper-to-beamer` | 创建并逐页检查能够独立阅读的 SUSTech Beamer 幻灯片。 |
 | `pdf-slides-to-video` | 生成与页面对齐的讲稿和语音，并组装经过验证的 MP4。 |
 | `markdown-to-video-cover` | 创建可选的宣传海报；它不会取代 Beamer 标题页视频封面。 |
 | `bilibili-video-uploader` | 校验元数据、执行预演、上传并核验经过明确授权的投稿。 |
-| `pdf-to-bilibili` | 协调整个分阶段工作流及其人工检查关口。 |
+| `paper-to-video` | 从 Beamer 清单和独立的逐页讲稿生成本地配音视频。 |
 | `sustech-beamer-theme-fix` | 诊断主题、资源路径、宏定义和 TeX 编译故障。 |
 
 ## 许可证摘要
@@ -140,10 +146,14 @@ done
 - 通过 `PATH` 或 Codex 捆绑的工作区运行环境发现 `python`、`latexmk`、`xelatex`、`lualatex`、`pdftoppm`、`ffmpeg` 和 `ffprobe`。
 - 保持源 PDF 不变，将生成物写入明确指定的论文或输出目录。
 - 不要在仓库中保存凭据。哔哩哔哩 cookies 应放在 `~/.bilibili/cookies.json`。
-- 用户明确请求 `bilibili` 模式即视为上传授权。应先执行校验和预演，再提交投稿，不重复弹出第二次确认。
-- 每条哔哩哔哩视频简介以 `一句话概述：本文……；其重要性在于……。` 开头，随后提供简短、通俗的视频介绍。
-- 批量处理论文时，使用 `pdf-to-bilibili/scripts/batch.py`：它会持续清空 CPU 准备队列，将所有准备完成且缓存失效的页面交给单个批次级 GPU worker，并在每篇论文的音频完成后立即启动该论文的视频处理和质量检查。队列清空后，GPU worker 会自动退出。
-- 每篇新论文都必须创建 `paper_presentation.json`。它是 Beamer 元数据和帧内容、旁白和证据审计、哔哩哔哩投稿元数据的唯一内容来源。
+- 只有当前对话中明确的上传或发布请求才构成投稿授权。先预演，
+  再使用上传命令；不把生成视频视为发布授权。
+- 哔哩哔哩简介只需非空并与论文一致，不强制固定的开头、句数或段落格式。
+- 批量处理论文时，使用 `paper-to-video/scripts/batch.py`。它使用一个
+  IndexTTS2 worker，并在每篇论文的音频完成后启动该论文的视频后处理。
+- `paper_presentation.json` 只保存 Beamer 元数据、帧内容和证据定位。
+  旁白由 `video/narrations.json` 保存，投稿元数据由
+  `video/video_meta.json` 保存。
 - 每个批次只加载一次 IndexTTS2，并保持 GPU 推理串行执行。模型推理前先完成 G2PW 发音预检；标准化音频完成后发送页面和论文完成事件；一篇论文完成后立即将其交给共享后处理队列，同时后续论文继续执行 TTS。TTS 音频标准化 worker 应占用统一配置的 FFmpeg 总预算；若总预算无法同时支持两个池，则推迟后处理直至 TTS 结束。XeLaTeX 需要单独限流，不能按论文重复扩增 worker 池。
 
 ## 主要输出

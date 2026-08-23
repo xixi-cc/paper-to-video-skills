@@ -25,10 +25,14 @@ Use the separate NVIDIA runtime configured in `~/.config/article-to-video/tts.js
 
 1. Parse `main.tex` and render `main.pdf` at 200 DPI with `scripts/slides_to_video.py`.
 2. Confirm rendered PNG count equals PDF page count, including implicit section-divider pages.
-3. When `paper_presentation.json` exists, use the generated `presentation_frames.tex` and `video/main_with_narration.tex`; edit narrations only in the manifest. For a legacy paper without a manifest, copy `main.tex` to `video/main_with_narration.tex` and add `% NARRATION:` after every explicit `\end{frame}`.
+3. Write page narration to `video/narrations.json` as one nonempty
+   `slide_NNN` string per rendered PDF page. The Beamer manifest intentionally
+   contains no narration or publication metadata.
 4. Write self-contained narration. Avoid “这一页”, “本页”, and “如图所示”. Explain axes, panels, trends, symbols, and numerical values.
-5. Keep narration concise but complete: target 35–50 Chinese words for title/outline, 100–175 for content/equations, 80–145 for figures, 35–50 for references, and 15–30 for closing. Compress an existing script to 80–85% only when the result still satisfies the requested duration and every quality gate. Never apply a compression percentage to a newly authored outline or use it to remove assumptions, equations, axes, quantitative results, or limitations.
-6. Run `write_narrations_to_files`; replace generic implicit-divider transitions when useful. Require one nonempty `.txt` per PDF page.
+5. Keep narration concise but complete. Let the scientific content determine
+   length; do not pad or compress merely to meet a fixed word or duration target.
+6. Materialize the narration JSON as one nonempty `.txt` per PDF page and
+   replace generic implicit-divider transitions when useful.
 7. Run local batch TTS:
 
 ```bash
@@ -45,11 +49,10 @@ IndexTTS2 receives the G2PW-audited narration, writes `.tts.txt` and `.pronuncia
    `cover_path` fixed to `cover.png`. Regenerate the cover whenever the slide PDF
    changes.
 
-For publishable paper explainers, follow
-[`../pdf-to-bilibili/references/publication-quality-standard.md`](../pdf-to-bilibili/references/publication-quality-standard.md).
-Require the actual duration, loudness, true peak, long-silence, pronunciation,
-and final-video visual receipts after the fixed 1.25× playback transform. Do not
-vary playback speed per paper or insert silence merely to meet a duration target.
+Before TTS, use the final visually reviewed slide PDF. After assembly, verify
+actual duration, loudness, true peak, long silence, pronunciation, and sampled
+video frames. Do not vary playback speed or insert silence merely to force a
+target duration.
 
 ## Verification
 

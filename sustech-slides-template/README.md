@@ -211,10 +211,19 @@ latexmk -xelatex main.tex
 | `\metric{num}{label}` | 🔢 大数字 + 说明（统计行） |
 | `\fitfigure{file}` | 🖼️ 溢出安全图（宽度 + 最大高度） |
 | `\figcap{n}{text}` | 📝 图注 "图 n: text"（编号不会换行） |
+| `\paperfigure{file}{label}{caption}{takeaway}` | 📄 论文图专页内容；外层 frame 用 `[plain,c]` |
+| `\equationderivation{conditions}{aligned rows}{meaning}{takeaway}` | 🧮 方程推导页内容 |
+| `\baselinecomparison{condition}{metric}{baseline}{paper}{delta}{takeaway}` | 📊 基线比较页内容 |
 | `\begin{callout}[title] ... \end{callout}` | 📦 要点框（橙色 alertblock） |
 | `\theadrow` / `\altrow` / `\thc{...}` | 📋 表头行 / 交替行 / 表头单元 |
 | `\zonetext` `\zonefig` `\zonehalf` | 📐 列宽 (0.55 / 0.42 / 0.48) |
 | `\tightgap` / `\deckgap` | ↔️ 统一垂直间距 |
+
+三个语义宏只负责 `frame` 内部内容，不会创建嵌套页面。由
+`paper_presentation.json` 生成页面时，分别使用 `kind: "figure"`、
+`kind: "equation"`、`kind: "comparison"`；论文图页还必须设置
+`frame_options: "plain,c"`。完整示例见
+[`paper-to-beamer/references/semantic-frame-macros.md`](../paper-to-beamer/references/semantic-frame-macros.md)。
 
 ### 📑 章节分隔页带一句话摘要
 

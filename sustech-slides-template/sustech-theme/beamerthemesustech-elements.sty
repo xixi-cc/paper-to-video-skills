@@ -30,6 +30,51 @@
 % \figcap{n}{文字} -> "图 n: 文字" — 自动换行并居中，标题始终在图下方
 \newcommand{\figcap}[2]{\par\smallskip{\centering\footnotesize\color{sustechgrey}\mbox{\figureprefix~#1:}~#2\par}}
 
+% --- 论文分享语义页 ----------------------------------------------------------
+% 这些宏只生成 frame 内部内容，便于 manifest 渲染器统一包裹 frame。
+% \paperfigure{file}{figure-label}{evidence-caption}{takeaway}
+\newcommand{\paperfigure}[4]{%
+  \centering
+  \includegraphics[width=\linewidth,height=0.62\textheight,keepaspectratio]{#1}\par
+  \figcap{#2}{#3}
+  \vspace{0.35em}
+  \begin{minipage}{0.94\linewidth}
+    \begin{callout}[结论]\small #4\end{callout}
+  \end{minipage}
+}
+
+% \equationderivation{assumptions}{aligned-rows}{interpretation}{takeaway}
+% 第二个参数只写 aligned 内部的行，例如 A&=B\\&=C。
+\newcommand{\equationderivation}[4]{%
+  \begin{block}{条件与适用范围}\small #1\end{block}
+  \vspace{-0.25em}
+  \begin{equation*}
+    \begin{aligned}#2\end{aligned}
+  \end{equation*}
+  \vspace{-0.35em}
+  \begin{block}{推导解释}\small #3\end{block}
+  \vspace{-0.25em}
+  \begin{callout}[本页关键]\small #4\end{callout}
+}
+
+% \baselinecomparison{condition}{metric}{baseline}{paper}{delta}{takeaway}
+\newcommand{\baselinecomparison}[6]{%
+  \begin{block}{比较条件}\small #1\end{block}
+  \vspace{-0.2em}
+  \centering
+  \begin{tabular}{@{}p{0.27\linewidth}p{0.28\linewidth}p{0.28\linewidth}@{}}
+    \toprule
+    \theadrow\thc{指标} & \thc{基线} & \thc{本文方法} \\
+    \midrule
+    #2 & #3 & \textbf{#4} \\
+    \bottomrule
+  \end{tabular}\par
+  \vspace{0.45em}
+  {\small\textbf{差值 / 增益：}\hlbox{#5}\par}
+  \vspace{0.35em}
+  \begin{callout}[结论]\small #6\end{callout}
+}
+
 % --- 指标大数字 --------------------------------------------------------------
 % \metric{100\%}{成功率}
 \newcommand{\metric}[2]{%

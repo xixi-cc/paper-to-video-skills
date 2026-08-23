@@ -1,4 +1,0 @@
-interface:
-  display_name: "Paper to Bilibili Pipeline"
-  short_description: "Orchestrate the paper-to-video publication workflow"
-  default_prompt: "Use $pdf-to-bilibili to run the requested stages of this paper-to-video workflow."

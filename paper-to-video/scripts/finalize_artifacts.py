@@ -49,19 +49,19 @@ def locate_inputs(root: Path) -> dict[str, Path]:
 
 def validate_completion(root: Path, inputs: dict[str, Path]) -> dict[str, Any]:
     state = load_json(root / "video" / "pipeline-state.json")
-    quality = load_json(root / "video" / "quality-audit.json")
     receipt = load_json(root / "video" / "upload-receipt.json")
     bvid = receipt.get("bvid")
-    if state.get("status") != "uploaded":
-        raise RuntimeError("Pipeline state is not uploaded")
-    if quality.get("valid") is not True:
-        raise RuntimeError("Final quality audit is not valid")
     if not isinstance(bvid, str) or not BV_PATTERN.fullmatch(bvid):
         raise RuntimeError("Upload receipt has no verified BVID")
+    if receipt.get("success") is not True or receipt.get("verification_required"):
+        raise RuntimeError("Upload receipt is not verified")
     video_hash = sha256_file(inputs["video"])
-    if quality.get("video_sha256") != video_hash:
-        raise RuntimeError("Quality audit does not match the final video")
-    return {"state": state, "quality": quality, "receipt": receipt, "bvid": bvid}
+    video_state = state.get("video", {})
+    if video_state.get("sha256") != video_hash:
+        raise RuntimeError("Pipeline state does not match the final video")
+    if not video_state.get("has_video_stream") or not video_state.get("has_audio_stream"):
+        raise RuntimeError("Pipeline state has not verified both media streams")
+    return {"state": state, "receipt": receipt, "bvid": bvid}
 
 
 def copy_if_changed(source: Path, target: Path) -> None:
@@ -110,7 +110,6 @@ def prepare_outputs(
             key: {"path": str(final_paths[key]), "sha256": hashes[key]}
             for key in final_paths
         },
-        "quality_audit": completion["quality"],
         "upload_receipt": completion["receipt"],
         "pipeline_state": completion["state"],
     }

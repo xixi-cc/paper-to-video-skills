@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
-"""Resumable three-stage batch pipeline for paper videos.
+"""Build verified local paper videos with one resumable batch pipeline.
 
 CPU preparation is parallel, all local-TTS tasks share one GPU worker process,
-and video/QA is parallel.  Selecting ``bilibili`` is publication authority;
-the script still dry-runs every upload and records an idempotency receipt.
+and video assembly is parallel. Uploading is owned by the separate
+``bilibili-video-uploader`` Skill.
 
 Usage:
-    python batch.py status papers.json
-    python batch.py compile papers.json --cpu-workers 4
-    python batch.py video papers.json --cpu-workers 4 --post-workers 2
-    python batch.py bilibili papers.json --cpu-workers 4 --post-workers 2
-    python batch.py finalize papers.json
-    python batch.py finalize papers.json --apply-finalize
+    python batch.py papers.json --cpu-workers 4 --post-workers 2
 """
 
 from __future__ import annotations
@@ -35,16 +30,9 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 SUITE_DIR = SCRIPT_DIR.parents[1]
 VIDEO_SCRIPTS = SUITE_DIR / "pdf-slides-to-video" / "scripts"
-UPLOAD_SCRIPT = SUITE_DIR / "bilibili-video-uploader" / "scripts" / "upload.py"
-FINALIZE_SCRIPT = SUITE_DIR / "pdf-to-bilibili" / "scripts" / "finalize_artifacts.py"
-MANIFEST_SCRIPT_DIR = SUITE_DIR / "pdf-to-bilibili" / "scripts"
-UPLOAD_VENV_PYTHON = SUITE_DIR / "bilibili-video-uploader" / ".venv" / "bin" / "python"
+MANIFEST_SCRIPT_DIR = SUITE_DIR / "paper-to-video" / "scripts"
 STATE_FILE = "pipeline-state.json"
-UPLOAD_RECEIPT = "upload-receipt.json"
-STAGES = (
-    "queued", "slides_done", "narration_done", "tts_done",
-    "video_done", "qa_passed", "uploaded",
-)
+STAGES = ("queued", "slides_done", "narration_done", "tts_done", "video_done")
 
 
 def utc_now() -> str:
@@ -57,41 +45,6 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
-
-
-def sha256_json(value: Any) -> str:
-    encoded = json.dumps(
-        value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def require_visual_receipt(
-    path: Path,
-    artifact_hash: str,
-    hash_key: str,
-    reviewed_key: str,
-) -> dict[str, Any]:
-    if not path.exists():
-        raise RuntimeError(f"Missing visual QA receipt: {path}")
-    receipt = json.loads(path.read_text(encoding="utf-8"))
-    if receipt.get(hash_key) != artifact_hash:
-        raise RuntimeError(f"Visual QA receipt is stale for {path}")
-    if receipt.get(reviewed_key) is not True:
-        raise RuntimeError(f"Visual QA is incomplete in {path}")
-    if reviewed_key == "all_pages_reviewed":
-        if receipt.get("standalone_readability_reviewed") is not True:
-            raise RuntimeError(
-                f"Standalone slide readability was not reviewed in {path}"
-            )
-        if receipt.get("sparse_pages"):
-            raise RuntimeError(
-                f"Sparse or narration-dependent slides remain in {path}: "
-                f"{receipt['sparse_pages']}"
-            )
-    if receipt.get("defects"):
-        raise RuntimeError(f"Visual QA defects remain in {path}: {receipt['defects']}")
-    return receipt
 
 
 def analyze_audio_quality(video: Path) -> dict[str, Any]:
@@ -184,6 +137,35 @@ def require_matching_slides(
         )
 
 
+def write_narration_files(
+    narration_path: Path, frame_dir: Path, slides: dict[str, Path],
+) -> dict[str, Any]:
+    if not narration_path.exists():
+        raise FileNotFoundError(f"Missing page narration: {narration_path}")
+    narrations = json.loads(narration_path.read_text(encoding="utf-8"))
+    if not isinstance(narrations, dict):
+        raise ValueError("video/narrations.json must contain a slide_NNN to text object")
+    expected = set(slides)
+    actual = set(narrations)
+    if expected != actual:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise RuntimeError(
+            "Narration coverage mismatch: "
+            f"missing={','.join(missing[:10]) or 'none'}; "
+            f"extra={','.join(extra[:10]) or 'none'}"
+        )
+    characters = 0
+    for name in sorted(expected):
+        text = narrations[name]
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"Narration is empty for {name}")
+        normalized = " ".join(text.splitlines()).strip()
+        (frame_dir / f"{name}.txt").write_text(normalized + "\n", encoding="utf-8")
+        characters += len(re.sub(r"\s+", "", normalized))
+    return {"pages": len(expected), "characters": characters}
+
+
 def load_papers(path: Path) -> list[dict[str, Any]]:
     papers = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(papers, list):
@@ -211,11 +193,13 @@ def load_state(root: Path) -> dict[str, Any]:
             state = {}
     else:
         state = {}
-    state.setdefault("schema_version", 1)
+    state["schema_version"] = 2
     state.setdefault("paper", root.name)
-    state.setdefault("stages", {stage: False for stage in STAGES})
-    for stage in STAGES:
-        state["stages"].setdefault(stage, False)
+    previous_stages = state.get("stages", {})
+    state["stages"] = {
+        stage: bool(previous_stages.get(stage, False))
+        for stage in STAGES
+    }
     state["stages"]["queued"] = True
     state.setdefault("hashes", {})
     state.setdefault("events", [])
@@ -260,7 +244,14 @@ def compile_deck(
     if not tex.exists():
         raise FileNotFoundError(f"Missing Beamer source: {tex}")
     content = tex.read_text(encoding="utf-8")
-    if len(re.findall(r"\\ph\{", content)) > 5:
+    # Manifest-backed decks keep the stock template as an unreachable
+    # \IfFileExists fallback; only reject placeholders when those generated
+    # include files are absent and the fallback would actually be rendered.
+    generated_includes_exist = (
+        (deck / "presentation_metadata.tex").exists()
+        and (deck / "presentation_frames.tex").exists()
+    )
+    if not generated_includes_exist and len(re.findall(r"\\ph\{", content)) > 5:
         raise RuntimeError(f"Unresolved Beamer placeholders: {root.name}")
     dependencies = [
         tex,
@@ -304,54 +295,55 @@ def prepare_paper(
     paper: dict[str, Any], force_compile: bool = False,
     latex_semaphore: threading.Semaphore | None = None,
 ) -> dict[str, Any]:
-    """CPU queue: compile, render, align narrations, and collect page hashes."""
+    """CPU queue: compile, render, load page narration, and collect hashes."""
     sys.path.insert(0, str(VIDEO_SCRIPTS))
-    from slides_to_video import (  # type: ignore
-        generate_cover,
-        render_slides,
-        write_narrations_to_files,
-    )
+    from slides_to_video import generate_cover, render_slides  # type: ignore
 
     root = paper_dir(paper)
     state = load_state(root)
     started = time.perf_counter()
     try:
         manifest_path = root / "paper_presentation.json"
-        manifest_result = None
-        if manifest_path.exists():
-            sys.path.insert(0, str(MANIFEST_SCRIPT_DIR))
-            from presentation_manifest import render_manifest  # type: ignore
-            manifest_result = render_manifest(root)
-            manifest_hash = manifest_result["manifest_sha256"]
-            if state["hashes"].get("presentation_manifest_sha256") != manifest_hash:
-                invalidate_from(state, "slides_done")
-            state["hashes"]["presentation_manifest_sha256"] = manifest_hash
+        if not manifest_path.exists():
+            raise FileNotFoundError(f"Missing Beamer manifest: {manifest_path}")
+        sys.path.insert(0, str(MANIFEST_SCRIPT_DIR))
+        from presentation_manifest import render_manifest  # type: ignore
+        manifest_result = render_manifest(root)
+        manifest_hash = manifest_result["manifest_sha256"]
+        if state["hashes"].get("presentation_manifest_sha256") != manifest_hash:
+            invalidate_from(state, "slides_done")
+        state["hashes"]["presentation_manifest_sha256"] = manifest_hash
         compile_deck(root, force=force_compile, latex_semaphore=latex_semaphore)
         slides_pdf = root / "slides-beamer" / "main.pdf"
         slides_tex = root / "slides-beamer" / "main.tex"
-        annotation = root / "video" / "main_with_narration.tex"
-        plan_tex = (
-            Path(manifest_result["frames_tex"])
-            if manifest_result is not None else slides_tex
-        )
-        if not annotation.exists():
-            raise FileNotFoundError(f"Missing narrated TeX: {annotation}")
+        narration_path = root / "video" / "narrations.json"
 
         previous_pdf_hash = state["hashes"].get("slides_pdf_sha256")
         previous_tex_hash = state["hashes"].get("slides_tex_sha256")
-        previous_annotation_hash = state["hashes"].get("narrated_tex_sha256")
+        previous_narration_hash = state["hashes"].get("narrations_sha256")
         pdf_hash = sha256_file(slides_pdf)
         tex_hash = sha256_file(slides_tex)
-        annotation_hash = sha256_file(annotation)
+        narration_hash = sha256_file(narration_path)
         if previous_pdf_hash != pdf_hash or previous_tex_hash != tex_hash:
             invalidate_from(state, "slides_done")
-        elif previous_annotation_hash != annotation_hash:
+        elif previous_narration_hash != narration_hash:
             invalidate_from(state, "narration_done")
         state["hashes"].update({
             "slides_pdf_sha256": pdf_hash,
             "slides_tex_sha256": tex_hash,
-            "narrated_tex_sha256": annotation_hash,
+            "narrations_sha256": narration_hash,
         })
+        previous_slide_review = state.get("slides", {})
+        state["slides"] = {
+            "pdf_sha256": pdf_hash,
+            "compiled": True,
+            "visually_reviewed": bool(
+                previous_slide_review.get("pdf_sha256") == pdf_hash
+                and previous_slide_review.get("visually_reviewed") is True
+            ),
+            "defects": previous_slide_review.get("defects", [])
+            if previous_slide_review.get("pdf_sha256") == pdf_hash else [],
+        }
         mark_stage(root, state, "slides_done")
 
         frame_dir = root / "video" / "video_frames"
@@ -364,42 +356,17 @@ def prepare_paper(
             png_files = exact_slide_files(frame_dir, "png")
         if not png_files:
             raise RuntimeError(f"No rendered slides for {root.name}")
+        state["slides"]["pages"] = len(png_files)
         title_slide = png_files.get("slide_001")
         if title_slide is None:
             raise RuntimeError(f"Missing rendered Beamer title page for {root.name}")
         generate_cover(str(title_slide), str(root / "video" / "cover.png"))
 
-        if manifest_result is not None:
-            slide_visual_qa = require_visual_receipt(
-                root / "slides-beamer" / "visual-qa.json",
-                pdf_hash,
-                "slides_pdf_sha256",
-                "all_pages_reviewed",
-            )
-            if slide_visual_qa.get("page_count") != len(png_files):
-                raise RuntimeError(
-                    "Slide visual QA page count does not match the rendered PDF: "
-                    f"{slide_visual_qa.get('page_count')} != {len(png_files)}"
-                )
-            state["hashes"]["slide_visual_qa_sha256"] = sha256_file(
-                root / "slides-beamer" / "visual-qa.json"
-            )
-
         _prune_unexpected_frames(frame_dir, set(png_files))
-        narration_result = write_narrations_to_files(
-            str(frame_dir), str(plan_tex), annotated_tex_path=str(annotation),
-            # A manifest is the source of truth and contains one narration for
-            # every explicit video page.  Synthesizing additional narration
-            # from \section markers creates orphan text files whenever the deck
-            # intentionally suppresses automatic section-transition frames.
-            # Preserve the legacy behavior only for non-manifest projects.
-            narrate_sections=manifest_result is None,
-        )
+        narration_result = write_narration_files(narration_path, frame_dir, png_files)
         txt_files = exact_slide_files(frame_dir, "txt")
         require_matching_slides(png_files, txt_files, "Narration", root.name)
-        narration_chars = sum(
-            len(path.read_text(encoding="utf-8").strip()) for path in txt_files.values()
-        )
+        narration_chars = int(narration_result["characters"])
         previous_pages = state["hashes"].get("pages", {})
         pages = {}
         for name in sorted(png_files):
@@ -421,6 +388,11 @@ def prepare_paper(
             "pages": len(png_files),
             "narration_characters": narration_chars,
             "average_characters_per_page": round(narration_chars / len(png_files), 1),
+        }
+        state["narration"] = {
+            "sha256": narration_hash,
+            "pages": len(txt_files),
+            "covered_pages": len(txt_files),
         }
         mark_stage(
             root, state, "narration_done",
@@ -532,97 +504,53 @@ def postprocess_paper(
         mark_stage(root, state, "video_done")
         probe = _ffprobe_video(output)
         state["metrics"].update(probe)
-        manifest_path = root / "paper_presentation.json"
-        quality_report: dict[str, Any] | None = None
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            duration_target = manifest.get("quality", {}).get("target_duration_minutes", [])
-            if not (
-                isinstance(duration_target, list) and len(duration_target) == 2
-                and duration_target[0] * 60 <= probe["duration_seconds"] <= duration_target[1] * 60
-            ):
-                raise RuntimeError(
-                    f"Video duration {probe['duration_seconds'] / 60:.2f} min is outside "
-                    f"the manifest quality target {duration_target} min"
-                )
-            audio_quality = analyze_audio_quality(output)
-            pronunciation_sidecars = sorted(
-                context["frame_dir"].glob("slide_*.pronunciation.json")
+        audio_quality = analyze_audio_quality(output)
+        pronunciation_sidecars = sorted(
+            context["frame_dir"].glob("slide_*.pronunciation.json")
+        )
+        if len(pronunciation_sidecars) != len(png_files):
+            raise RuntimeError(
+                "Pronunciation audit count does not match video pages: "
+                f"{len(pronunciation_sidecars)} != {len(png_files)}"
             )
-            if len(pronunciation_sidecars) != len(png_files):
-                raise RuntimeError(
-                    "Pronunciation audit count does not match video pages: "
-                    f"{len(pronunciation_sidecars)} != {len(png_files)}"
-                )
-            invalid_pronunciation = []
-            for path in pronunciation_sidecars:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                if payload.get("invalid_tokens") or payload.get("valid") is False:
-                    invalid_pronunciation.append(path.name)
-            if invalid_pronunciation:
-                raise RuntimeError(
-                    "Pronunciation audits failed: " + ", ".join(invalid_pronunciation)
-                )
-            quality_report = {
-                "valid": False,
-                "automated_checks_passed": True,
-                "video_sha256": video_hash,
-                "duration_seconds": probe["duration_seconds"],
-                "target_duration_minutes": duration_target,
-                "pages": len(png_files),
-                "pronunciation_pages_valid": len(pronunciation_sidecars),
-                **audio_quality,
-                "checked_at": utc_now(),
-            }
-            atomic_json(root / "video" / "quality-audit.json", quality_report)
-        metadata = root / "video" / "video_meta.json"
+        invalid_pronunciation = []
+        for path in pronunciation_sidecars:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("invalid_tokens") or payload.get("valid") is False:
+                invalid_pronunciation.append(path.name)
+        if invalid_pronunciation:
+            raise RuntimeError(
+                "Pronunciation audits failed: " + ", ".join(invalid_pronunciation)
+            )
         cover = root / "video" / "cover.png"
-        metadata_hash = sha256_file(metadata) if metadata.exists() else None
         cover_hash = sha256_file(cover) if cover.exists() else None
-        if (
-            state["hashes"].get("metadata_sha256") != metadata_hash
-            or state["hashes"].get("cover_sha256") != cover_hash
-        ):
-            state["stages"]["uploaded"] = False
-        state["hashes"]["metadata_sha256"] = metadata_hash
         state["hashes"]["cover_sha256"] = cover_hash
-        if quality_report is not None:
-            video_visual_path = root / "video" / "video-visual-qa.json"
-            try:
-                video_visual = require_visual_receipt(
-                    video_visual_path,
-                    video_hash,
-                    "video_sha256",
-                    "all_samples_reviewed",
-                )
-            except RuntimeError as exc:
-                quality_report["video_visual_qa"] = str(exc)
-                atomic_json(root / "video" / "quality-audit.json", quality_report)
-                state["status"] = "awaiting_video_visual_qa"
-                state["last_error"] = None
-                save_state(root, state)
-                return {
-                    "paper": root.name,
-                    "status": "awaiting_video_visual_qa",
-                    "video": str(output),
-                    "video_summary": video_summary,
-                    "qa": {**probe, **quality_report},
-                    "elapsed_seconds": round(time.perf_counter() - started, 3),
-                }
-            quality_report["valid"] = True
-            quality_report["video_visual_qa_sha256"] = sha256_file(video_visual_path)
-            quality_report["sampled_video_seconds"] = video_visual.get(
-                "sampled_video_seconds", []
-            )
-            atomic_json(root / "video" / "quality-audit.json", quality_report)
-            state["hashes"]["video_visual_qa_sha256"] = sha256_file(video_visual_path)
-        mark_stage(root, state, "qa_passed")
+        previous_video_review = state.get("video", {})
+        state["audio"] = {
+            "pages": len(mp3_files),
+            "valid_pages": len(mp3_files),
+            "pronunciation_pages_valid": len(pronunciation_sidecars),
+            **audio_quality,
+        }
+        state["video"] = {
+            "sha256": video_hash,
+            "has_video_stream": True,
+            "has_audio_stream": True,
+            **probe,
+            "sampled": bool(
+                previous_video_review.get("sha256") == video_hash
+                and previous_video_review.get("sampled") is True
+            ),
+            "defects": previous_video_review.get("defects", [])
+            if previous_video_review.get("sha256") == video_hash else [],
+        }
+        save_state(root, state)
         return {
             "paper": root.name,
-            "status": "qa_passed",
+            "status": "video_done",
             "video": str(output),
             "video_summary": video_summary,
-            "qa": probe,
+            "qa": {**probe, **audio_quality},
             "elapsed_seconds": round(time.perf_counter() - started, 3),
         }
     except Exception as exc:
@@ -630,192 +558,15 @@ def postprocess_paper(
         return {"paper": root.name, "status": "failed", "error": str(exc)}
 
 
-def resolve_biliup_python() -> Path:
-    override = os.environ.get("BILIUP_PYTHON")
-    candidates = [Path(override).expanduser() if override else None, UPLOAD_VENV_PYTHON, Path(sys.executable)]
-    for candidate in candidates:
-        if not candidate or not candidate.exists():
-            continue
-        probe = subprocess.run(
-            [str(candidate), "-c", "import biliup"], capture_output=True, text=True,
-        )
-        if probe.returncode == 0:
-            return candidate
-    raise RuntimeError(
-        "No reusable biliup environment found. Create bilibili-video-uploader/.venv once; "
-        "the batch pipeline never installs into system Python."
-    )
-
-
-def upload_paper(context: dict[str, Any]) -> dict[str, Any]:
-    """Upload once after dry-run; an existing matching receipt prevents duplicates."""
-    root: Path = context["root"]
-    state = load_state(root)
-    try:
-        video_dir = root / "video"
-        quality_audit = video_dir / "quality-audit.json"
-        if not quality_audit.exists():
-            raise RuntimeError("Missing video/quality-audit.json; refusing publication")
-        quality = json.loads(quality_audit.read_text(encoding="utf-8"))
-        if not quality.get("valid"):
-            raise RuntimeError("Quality audit did not pass; refusing publication")
-        videos = sorted(video_dir.glob("*.mp4"))
-        metadata = video_dir / "video_meta.json"
-        if not videos or not metadata.exists():
-            raise RuntimeError("Upload inputs are incomplete")
-        if quality.get("video_sha256") != sha256_file(videos[0]):
-            raise RuntimeError("Quality audit does not match the current video; refusing publication")
-        require_visual_receipt(
-            video_dir / "video-visual-qa.json",
-            sha256_file(videos[0]),
-            "video_sha256",
-            "all_samples_reviewed",
-        )
-        slides_pdf = root / "slides-beamer" / "main.pdf"
-        require_visual_receipt(
-            root / "slides-beamer" / "visual-qa.json",
-            sha256_file(slides_pdf),
-            "slides_pdf_sha256",
-            "all_pages_reviewed",
-        )
-        cover = video_dir / "cover.png"
-        fingerprint = sha256_json({
-            "video": sha256_file(videos[0]),
-            "metadata": sha256_file(metadata),
-            "cover": sha256_file(cover) if cover.exists() else None,
-        })
-        receipt_path = video_dir / UPLOAD_RECEIPT
-        if not receipt_path.exists():
-            # Migrate older successful runs so adopting this orchestrator never
-            # republishes an already submitted video.
-            for legacy_path in (video_dir / "generation_metrics.json", video_dir / "pipeline-summary.json"):
-                if not legacy_path.exists():
-                    continue
-                try:
-                    legacy = json.loads(legacy_path.read_text(encoding="utf-8"))
-                except json.JSONDecodeError:
-                    continue
-                legacy_bvid = legacy.get("bilibili_bvid") or legacy.get("bvid")
-                if legacy_bvid:
-                    atomic_json(receipt_path, {
-                        "success": True,
-                        "fingerprint": fingerprint,
-                        "submitted_at": legacy.get("upload_verified_at") or utc_now(),
-                        "bvid": legacy_bvid,
-                        "verification_required": False,
-                        "migrated_from": str(legacy_path),
-                    })
-                    break
-        if receipt_path.exists():
-            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
-            if receipt.get("fingerprint") == fingerprint and receipt.get("success"):
-                if receipt.get("bvid") and not receipt.get("verification_required"):
-                    mark_stage(root, state, "uploaded", cached_receipt=True)
-                    return {"paper": root.name, "status": "uploaded", "cached": True, **receipt}
-                # The network submission succeeded earlier but biliup did not
-                # return a BV id. Verify the exact title; never resubmit a
-                # pending receipt because that can create a duplicate video.
-                python = resolve_biliup_python()
-                verify = subprocess.run(
-                    [str(python), str(UPLOAD_SCRIPT), str(root), "--verify-only"],
-                    capture_output=True, text=True,
-                )
-                match = re.search(r"BV[0-9A-Za-z]{10}", verify.stdout + verify.stderr)
-                if match:
-                    receipt["bvid"] = match.group(0)
-                    receipt["verification_required"] = False
-                    receipt["verified_at"] = utc_now()
-                    atomic_json(receipt_path, receipt)
-                    mark_stage(root, state, "uploaded", cached_receipt=True, bvid=receipt["bvid"])
-                    return {"paper": root.name, "status": "uploaded", "cached": True, **receipt}
-                state["status"] = "verification_pending"
-                save_state(root, state)
-                return {"paper": root.name, "status": "verification_pending", **receipt}
-            if receipt.get("success"):
-                raise RuntimeError(
-                    "An earlier successful upload receipt exists but its content hash differs. "
-                    "Refusing to create a duplicate; update or replace the existing Bilibili submission explicitly."
-                )
-
-        python = resolve_biliup_python()
-        dry = subprocess.run(
-            [str(python), str(UPLOAD_SCRIPT), str(root), "--dry-run"],
-            capture_output=True, text=True,
-        )
-        if dry.returncode != 0:
-            raise RuntimeError("Upload dry-run failed: " + (dry.stderr or dry.stdout)[-1000:])
-        actual = subprocess.run(
-            [str(python), str(UPLOAD_SCRIPT), str(root), "--confirm-upload"],
-            capture_output=True, text=True,
-        )
-        output = actual.stdout + actual.stderr
-        log = video_dir / "bilibili-upload.log"
-        log.write_text(dry.stdout + dry.stderr + "\n" + output, encoding="utf-8")
-        if actual.returncode != 0:
-            raise RuntimeError("Upload failed: " + output[-1000:])
-        match = re.search(r"BV[0-9A-Za-z]{10}", output)
-        receipt = {
-            "success": True,
-            "fingerprint": fingerprint,
-            "submitted_at": utc_now(),
-            "bvid": match.group(0) if match else None,
-            "verification_required": match is None,
-            "log": str(log),
-        }
-        atomic_json(receipt_path, receipt)
-        if receipt["bvid"]:
-            receipt["verification_required"] = False
-            atomic_json(receipt_path, receipt)
-            mark_stage(root, state, "uploaded", bvid=receipt["bvid"])
-            return {"paper": root.name, "status": "uploaded", **receipt}
-        state["status"] = "verification_pending"
-        save_state(root, state)
-        return {"paper": root.name, "status": "verification_pending", **receipt}
-    except Exception as exc:
-        mark_failure(root, state, "upload", exc)
-        return {"paper": root.name, "status": "failed", "error": str(exc)}
-
-
-def compile_existing(
-    papers: list[dict[str, Any]], workers: int, latex_workers: int, force: bool,
-) -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    latex_semaphore = threading.BoundedSemaphore(max(1, latex_workers))
-
-    def render_then_compile(paper: dict[str, Any]) -> None:
-        root = paper_dir(paper)
-        if (root / "paper_presentation.json").exists():
-            sys.path.insert(0, str(MANIFEST_SCRIPT_DIR))
-            from presentation_manifest import render_manifest  # type: ignore
-            render_manifest(root)
-        compile_deck(root, force, latex_semaphore)
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {
-            executor.submit(render_then_compile, p): p
-            for p in papers
-        }
-        for future in as_completed(futures):
-            root = paper_dir(futures[future])
-            try:
-                future.result()
-                results.append({"paper": root.name, "status": "slides_done"})
-            except Exception as exc:
-                results.append({"paper": root.name, "status": "failed", "error": str(exc)})
-    return results
-
-
 def run_pipeline(
     papers: list[dict[str, Any]], cpu_workers: int, post_workers: int,
     latex_workers: int, ffmpeg_workers: int,
-    backend: str | None, config_path: str | None, upload: bool,
-    force_compile: bool,
+    config_path: str | None, force_compile: bool,
 ) -> dict[str, Any]:
     """Run one batch-scoped GPU worker and overlap completed papers with post."""
     sys.path.insert(0, str(VIDEO_SCRIPTS))
     from tts_backends import (  # type: ignore
         load_tts_config,
-        resolve_backend,
         run_local_tts_batch,
     )
 
@@ -834,9 +585,7 @@ def run_pipeline(
     ready = [item for item in prepared if "error" not in item]
     cpu_failed = [item for item in prepared if "error" in item]
 
-    selected = resolve_backend(backend, config_path)
-    if selected != "indextts2":
-        raise ValueError("The production GPU queue supports IndexTTS2 only")
+    selected = "indextts2"
     tasks = [task for item in ready for task in item["tasks"]]
     tts_payload: dict[str, Any] = {
         "backend": selected, "tasks": [], "worker_closed": True,
@@ -924,26 +673,12 @@ def run_pipeline(
         else:
             tts_finished = time.perf_counter()
 
-        # Preserve compatibility if an older worker returns only the final
-        # result marker, and release deferred papers when overlap was disabled
-        # because the configured FFmpeg budget was too small.
-        final_results = {
-            str(item["name"]): item for item in tts_payload.get("tasks", [])
-        }
-        for paper_id, context in ready_by_id.items():
-            if paper_id in submitted_papers:
-                continue
-            event = deferred_events.get(paper_id)
-            if event is None:
-                names = [str(task["name"]) for task in context["tasks"]]
-                if all(name in final_results for name in names):
-                    event = {
-                        "type": "paper_done",
-                        "paper_id": paper_id,
-                        "tasks": [final_results[name] for name in names],
-                    }
-            if event is not None:
-                submit_completed_paper(event)
+        for event in deferred_events.values():
+            submit_completed_paper(event)
+
+        missing_events = sorted(set(ready_by_id) - submitted_papers)
+        if missing_events and gpu_error is None:
+            gpu_error = "TTS worker did not emit paper_done for: " + ", ".join(missing_events)
 
         if gpu_error is not None:
             error = RuntimeError(gpu_error)
@@ -956,34 +691,9 @@ def run_pipeline(
             post_results.append(future.result())
     post_finished = time.perf_counter()
 
-    upload_started = time.perf_counter()
-    upload_results: list[dict[str, Any]] = []
-    if upload:
-        passed_names = {
-            result["paper"] for result in post_results if result.get("status") == "qa_passed"
-        }
-        # Keep publishing serial to avoid account rate-limit bursts. Ordinary
-        # paper failures remain isolated, but a platform rate limit is global:
-        # trip a circuit breaker and defer the rest instead of hammering the
-        # account with requests that are certain to fail.
-        rate_limited = False
-        for item in ready:
-            if item["root"].name in passed_names:
-                if rate_limited:
-                    upload_results.append({
-                        "paper": item["root"].name,
-                        "status": "deferred_rate_limit",
-                    })
-                    continue
-                result = upload_paper(item)
-                upload_results.append(result)
-                if "rate-limit" in str(result.get("error", "")).lower():
-                    rate_limited = True
-    upload_finished = time.perf_counter()
-
     summary = {
         "status": "complete" if not cpu_failed and not gpu_error and all(
-            item.get("status") != "failed" for item in post_results + upload_results
+            item.get("status") != "failed" for item in post_results
         ) else "partial_failure",
         "papers": len(papers),
         "cpu_ready": len(ready),
@@ -1008,7 +718,6 @@ def run_pipeline(
             "error": gpu_error,
         },
         "post": post_results,
-        "uploads": upload_results,
         "overlap": {
             "enabled": overlap_enabled,
             "papers_submitted_to_post_before_tts_finished": (
@@ -1022,7 +731,6 @@ def run_pipeline(
             "post_span_seconds": round(
                 post_finished - (first_post_submitted_at or post_finished), 3
             ),
-            "upload_wall_seconds": round(upload_finished - upload_started, 3),
         },
         "elapsed_seconds": round(time.perf_counter() - started, 3),
     }
@@ -1030,115 +738,20 @@ def run_pipeline(
     return summary
 
 
-def print_dashboard(papers: list[dict[str, Any]]) -> None:
-    rows = []
-    for paper in papers:
-        root = paper_dir(paper)
-        state = load_state(root)
-        save_state(root, state)
-        rows.append({
-            "paper": root.name,
-            "status": state.get("status", "queued"),
-            "stages": state["stages"],
-            "last_error": state.get("last_error"),
-        })
-    print(json.dumps(rows, ensure_ascii=False, indent=2))
-
-
-def finalize_papers(
-    papers: list[dict[str, Any]], apply: bool = False,
-) -> dict[str, Any]:
-    """Finalize uploaded papers serially, isolating paper-level failures.
-
-    Cleanup is deliberately not parallel: each paper is destructive only when
-    ``apply`` is true, and serial execution keeps the audit output unambiguous.
-    """
-    results: list[dict[str, Any]] = []
-    for paper in papers:
-        root = paper_dir(paper)
-        command = [sys.executable, str(FINALIZE_SCRIPT), str(root)]
-        if apply:
-            command.append("--apply")
-        completed = subprocess.run(command, capture_output=True, text=True)
-        if completed.returncode != 0:
-            message = (completed.stderr or completed.stdout).strip()
-            results.append({
-                "paper": root.name,
-                "status": "failed",
-                "mode": "applied" if apply else "dry-run",
-                "error": message[-2000:],
-            })
-            continue
-        try:
-            payload = json.loads(completed.stdout)
-        except json.JSONDecodeError as exc:
-            results.append({
-                "paper": root.name,
-                "status": "failed",
-                "mode": "applied" if apply else "dry-run",
-                "error": f"Finalizer returned invalid JSON: {exc}",
-            })
-            continue
-        results.append({
-            "paper": root.name,
-            "status": "finalized" if apply else "ready_to_finalize",
-            **payload,
-        })
-    failures = sum(item.get("status") == "failed" for item in results)
-    return {
-        "status": "complete" if failures == 0 else "partial_failure",
-        "mode": "applied" if apply else "dry-run",
-        "papers": len(papers),
-        "failed": failures,
-        "results": results,
-    }
-
-
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "mode", choices=["status", "compile", "video", "bilibili", "finalize"],
-    )
+    parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("papers_json", type=Path)
     parser.add_argument("--cpu-workers", type=int, default=min(4, os.cpu_count() or 2))
     parser.add_argument("--post-workers", type=int, default=2)
     parser.add_argument("--latex-workers", type=int, default=2)
     parser.add_argument("--ffmpeg-workers", type=int, default=min(6, os.cpu_count() or 2))
-    parser.add_argument("--backend", choices=["indextts2"], default="indextts2")
     parser.add_argument("--tts-config")
     parser.add_argument("--force-compile", action="store_true")
-    parser.add_argument(
-        "--confirm-upload", action="store_true",
-        help="Deprecated compatibility flag; bilibili mode already grants upload authority.",
-    )
-    parser.add_argument(
-        "--apply-finalize", action="store_true",
-        help=(
-            "Apply final artifact cleanup. Without this flag, finalize mode is a "
-            "non-mutating dry-run."
-        ),
-    )
     args = parser.parse_args()
     papers = load_papers(args.papers_json)
-    if args.mode == "status":
-        print_dashboard(papers)
-        return
-    if args.mode == "compile":
-        print(json.dumps(
-            compile_existing(
-                papers, args.cpu_workers, args.latex_workers, args.force_compile,
-            ),
-            ensure_ascii=False, indent=2,
-        ))
-        return
-    if args.mode == "finalize":
-        summary = finalize_papers(papers, apply=args.apply_finalize)
-        print(json.dumps(summary, ensure_ascii=False, indent=2))
-        raise SystemExit(0 if summary["status"] == "complete" else 1)
     summary = run_pipeline(
         papers, args.cpu_workers, args.post_workers,
-        args.latex_workers, args.ffmpeg_workers, args.backend,
-        args.tts_config, upload=args.mode == "bilibili",
+        args.latex_workers, args.ffmpeg_workers, args.tts_config,
         force_compile=args.force_compile,
     )
     raise SystemExit(0 if summary["status"] == "complete" else 1)

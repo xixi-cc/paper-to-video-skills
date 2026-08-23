@@ -18,7 +18,10 @@ modification, public redistribution, and distribution of the upstream and
 derived Skill content under this repository's MIT License. The maintainer
 retains the authorization record.
 
-This authorization applies to the original seven-Skill workflow. It does not
+This authorization applies to the original seven-Skill workflow. The separate
+arXiv source-intake Skill in this repository is an independently implemented
+Codex adaptation informed by the public workflow shape of the later upstream
+`paper-share-skills` release; no upstream source file is vendored. It does not
 replace the separate licenses or terms of the templates, models, services,
 fonts, tools, or voice assets identified below.
 

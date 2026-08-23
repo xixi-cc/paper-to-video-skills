@@ -1,0 +1,4 @@
+interface:
+  display_name: "Download arXiv Source"
+  short_description: "Fetch TeX and figures with a provenance receipt"
+  default_prompt: "Use $paper-download-arxiv-source to fetch this arXiv source safely and record its provenance."
