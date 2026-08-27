@@ -26,9 +26,11 @@
 ## 工作流
 
 ```text
-论文 PDF ───────────────→ 视觉检查；按需转 Markdown
-arXiv URL/ID → PDF + TeX 源码、原始图片和来源回执
-                      ↓
+论文 PDF / arXiv URL/ID
+  → 保留 PDF；arXiv 同时获取 TeX、原始图片和来源回执
+  → PDF 视觉检查
+  → MinerU Open API → source/mineru/<stem>.md + images/
+  → 用 Markdown 建立结构，用 PDF/TeX 核对公式、图片和证据
   → paper-to-beamer
   → pdf-slides-to-video
   → 可选：markdown-to-video-cover 海报
@@ -131,7 +133,7 @@ Beamer 幻灯片转成视频：
 | Skill | 功能 |
 | --- | --- |
 | `paper-download-arxiv-source` | 下载并安全解包 arXiv TeX/原始图片，记录哈希来源契约。 |
-| `pdf-to-markdown` | 从论文中提取结构化 Markdown、公式、表格和图片。 |
+| `pdf-to-markdown` | 使用明确选择的本地 MinerU 或 MinerU Open API，从论文中提取结构化 Markdown、公式、表格和图片。 |
 | `paper-to-beamer` | 创建并逐页检查能够独立阅读的 SUSTech Beamer 幻灯片。 |
 | `pdf-slides-to-video` | 生成与页面对齐的讲稿和语音，并组装经过验证的 MP4。 |
 | `markdown-to-video-cover` | 创建可选的宣传海报；它不会取代 Beamer 标题页视频封面。 |
@@ -166,6 +168,11 @@ Beamer 幻灯片转成视频：
 - 新生成的视频保留 TTS 原生语速，并在 FFmpeg 合成阶段默认应用 1.25 倍播放速度；不会自动重写既有视频。
 - 通过 `PATH` 或 Codex 捆绑的工作区运行环境发现 `python`、`latexmk`、`xelatex`、`lualatex`、`pdftoppm`、`ffmpeg` 和 `ffprobe`。
 - 保持源 PDF 不变，将生成物写入明确指定的论文或输出目录。
+- 当前论文工作流在进入 `paper-to-beamer` 前先运行 `pdf-to-markdown`；对于
+  已授权远程处理的论文，显式使用 `--engine open-api`。转换器自身默认仍为
+  本地引擎，只有显式选择 `--engine open-api`
+  才会将论文提交给已配置的 MinerU 在线服务。Token 只保存在用户私有配置
+  或 `MINERU_TOKEN` 中，不进入仓库、提示词或日志命令。
 - 不要在仓库中保存凭据。哔哩哔哩 cookies 应放在 `~/.bilibili/cookies.json`。
 - 只有当前对话中明确的上传或发布请求才构成投稿授权。先预演，
   再使用上传命令；不把生成视频视为发布授权。
@@ -180,6 +187,7 @@ Beamer 幻灯片转成视频：
 ## 主要输出
 
 - Beamer：`main.tex`、`main.pdf`、`figures/`、`sustech-theme/`
+- MinerU：`source/mineru/<stem>.md`、`source/mineru/images/`
 - 视频：`video_frames/`、旁白文本、MP3 音频、配音 MP4、封面和元数据
 - 可选海报：`poster.tex`、`poster.pdf`、`poster.png`
 

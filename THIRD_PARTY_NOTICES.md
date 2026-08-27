@@ -70,9 +70,12 @@ expand the IndexTTS2 model license, including its terms for generated outputs.
 
 ## Other external dependencies
 
-MinerU, G2PW, biliup, FFmpeg, Poppler, TeX Live, uv, PyMuPDF, Pillow,
+MinerU and the optional MinerU Open API service, G2PW, biliup, FFmpeg, Poppler,
+TeX Live, uv, PyMuPDF, Pillow,
 pdf2image, Requests, CUDA, PyTorch, FlashAttention, and their transitive
 dependencies are installed separately. Each remains subject to its own
-license and terms. Bilibili upload and withdrawal functions also require the
-user to comply with applicable Bilibili platform rules. No platform,
+license and terms. The hosted MinerU route transmits input documents to the
+configured service and must be selected explicitly. Bilibili upload and
+withdrawal functions also require the user to comply with applicable Bilibili
+platform rules. No platform,
 dependency project, university, or model publisher endorses this repository.

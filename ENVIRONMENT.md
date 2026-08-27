@@ -124,9 +124,37 @@ pdf-slides-to-video/.venv/bin/python \
   --config ~/.config/article-to-video/tts.json
 ```
 
-## MinerU environment
+## MinerU environments
 
-`pdf-to-markdown` uses MinerU's in-process API. Because MinerU is a large,
+### Hosted MinerU Open API
+
+The `pdf-to-markdown` wrapper supports the separately installed
+`mineru-open-api` CLI. This route uploads each input document to the configured
+MinerU service, so use it only for documents whose remote processing has been
+authorized. Authenticate once in the private user configuration:
+
+```bash
+mineru-open-api version
+mineru-open-api auth
+mineru-open-api auth --verify
+```
+
+The CLI stores its token outside this repository. For non-interactive runs it
+may instead read `MINERU_TOKEN`; never put the token in a tracked file or pass
+it on the command line. The workflow invokes precision extraction explicitly:
+
+```bash
+python pdf-to-markdown/convert.py INPUT OUTPUT_DIR \
+  --engine open-api --lang ch --api-model auto
+```
+
+`--engine local` remains the converter default, so a missing engine flag cannot
+silently upload a document. Set `MINERU_OPEN_API_BIN` only when the executable
+is not discoverable on `PATH`.
+
+### Local MinerU
+
+The local route uses MinerU's in-process API. Because MinerU is a large,
 optional dependency, install it in a separate environment. Follow the current
 upstream documentation; a typical full installation is:
 
@@ -136,8 +164,9 @@ uv pip install --python ~/.local/share/article-to-video/mineru/bin/python \
   -U "mineru[all]"
 ```
 
-Run `pdf-to-markdown/convert.py` with that environment's Python. GPU support
-and model downloads depend on the MinerU version and selected backend.
+Run `pdf-to-markdown/convert.py --engine local` with that environment's Python.
+GPU support and model downloads depend on the MinerU version and selected
+backend.
 
 ## Bilibili upload environment
 

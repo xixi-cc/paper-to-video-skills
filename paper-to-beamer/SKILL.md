@@ -28,10 +28,15 @@ silently inheriting or falling back to the parent model.
 
 1. For an arXiv URL or ID, invoke `paper-download-arxiv-source` and read its
    source contract. For a local PDF, preserve the original file.
-2. Inspect the complete rendered PDF. The PDF is the visual authority; use
-   matching TeX first for equations, tables, captions, references, and original
-   figure assets. Use `pdf-to-markdown` only when it adds useful structure.
-3. Read [`references/content-writing-guide.md`](references/content-writing-guide.md)
+2. Inspect the complete rendered PDF, then invoke `pdf-to-markdown` before
+   presentation analysis. For the authorized hosted route, write its outputs to
+   `<paper-root>/source/mineru/` with an explicit `--engine open-api`; never
+   infer remote-upload permission from a configured token alone.
+3. Use the MinerU Markdown as the initial structural reading representation.
+   The rendered PDF remains the visual authority, and matching TeX remains the
+   authority for equations, tables, captions, references, and original figure
+   assets. Do not replace either verification source with the Markdown.
+4. Read [`references/content-writing-guide.md`](references/content-writing-guide.md)
    and map each planned claim to a paper page, figure, equation, table,
    reference, URL, or exact TeX location.
 
