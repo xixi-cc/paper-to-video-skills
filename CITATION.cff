@@ -1,0 +1,14 @@
+cff-version: 1.2.0
+message: "Please cite the exact release or commit used, and cite generated outputs and source papers separately."
+title: "Paper to Video Skills: Codex adaptation"
+type: software
+authors:
+  - name: "白拾的物理AI组会"
+  - family-names: "Cao"
+    given-names: "Xineng"
+    alias: "Xixi Cao"
+  - name: "Paper to Video Skills contributors"
+year: 2026
+license: MIT
+repository-code: "https://github.com/xixi-cc/paper-to-video-skills"
+url: "https://github.com/xixi-cc/paper-to-video-skills"

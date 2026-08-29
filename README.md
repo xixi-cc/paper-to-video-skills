@@ -143,6 +143,11 @@ Beamer 幻灯片转成视频：
 
 ## 许可证摘要
 
+需要在论文、报告或可复现工作流中引用本项目时，请使用
+[`CITATION.cff`](CITATION.cff) 或 [`CITATION.md`](CITATION.md)，并注明实际使用的
+release tag 或 commit hash。工具仓库的引用不能替代对生成幻灯片、视频及原始论文
+的分别引用。
+
 | 内容 | 许可证或适用条款 |
 | --- | --- |
 | 本仓库维护者独立新增或修改的原创代码和文档 | [MIT 许可证](LICENSE) |
