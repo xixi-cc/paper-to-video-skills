@@ -1,0 +1,219 @@
+# 论文分享工作流：安装与使用指南
+
+本仓库是论文到演示文稿工作流面向 Codex Desktop/WSL 的适配版本。项目以 Beamer 为主要幻灯片格式，并保留原有的 Skill、脚本、模板和资源目录结构。
+
+使用本工作流制作的论文解读视频发布在
+[溪溪-cc 的哔哩哔哩主页](https://space.bilibili.com/628726196)。
+
+## 项目来源与改编
+
+这套 Skills 的原始版本来自 B 站 UP 主
+[白拾的物理AI组会](https://space.bilibili.com/98639326)（亦称“白拾的物理组会”）。感谢原作者设计并分享论文解析、Beamer 幻灯片、视频制作和哔哩哔哩投稿工作流。
+
+本仓库维护者 [溪溪-cc](https://space.bilibili.com/628726196) 在该版本基础上，根据自己的实际使用情况进行了修改，主要面向：
+
+- Codex Desktop、Codex CLI 与 WSL/Linux 环境；
+- 物理与人工智能交叉方向的论文阅读、组会汇报和视频分享；
+- 可复现的本地依赖配置、IndexTTS2 配音、质量检查和发布安全边界。
+
+因此，本仓库是针对个人科研工作流制作的 Codex 适配与扩展版本，不是完全独立创作的原始 Skill 套件，也不代表原作者或其频道对本仓库提供官方背书。
+
+原始 Skill 套件及本仓库维护者在其基础上新增或修改的内容，经原作者明确书面授权，采用 [MIT 许可证](LICENSE)发布。该授权允许修改、公开再分发并以 MIT 许可证发布；授权记录由维护者留存。另行列出的第三方模板、模型、工具和服务仍适用各自的条款；安装、使用或再分发前请阅读
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。本仓库不包含模型、凭据、虚拟环境以及生成的论文或视频产物。合成语音 Voice 319 的参考音频采用单独的
+[CC BY 4.0 许可证](VOICE_LICENSE.md)发布，详情见其
+[可复现性说明](pdf-slides-to-video/references/voice-319.md)。
+
+## 工作流
+
+```text
+论文 PDF / arXiv URL/ID
+  → 保留 PDF；arXiv 同时获取 TeX、原始图片和来源回执
+  → PDF 视觉检查
+  → MinerU Open API → source/mineru/<stem>.md + images/
+  → 用 Markdown 建立结构，用 PDF/TeX 核对公式、图片和证据
+  → paper-to-beamer
+  → pdf-slides-to-video
+  → 可选：markdown-to-video-cover 海报
+  → 可选：bilibili-video-uploader 投稿
+```
+
+`paper-to-video` 负责将已完成的 Beamer 幻灯片组装为本地视频；
+`sustech-beamer-theme-fix` 用于诊断 Beamer 主题和编译问题。投稿始终由
+`bilibili-video-uploader` 单独处理。
+
+### 模型路由
+
+这套 Skills 不继承当前主会话的模型来执行各阶段。主会话只负责调度，
+每个阶段会恰好委派给一个带显式模型覆盖的 Codex 子代理：
+
+| 阶段 | 模型 | 推理强度 |
+| --- | --- | --- |
+| Beamer 内容质量工作：论文理解、叙事结构、逐页内容、公式与图片选择、内容相关布局修改和最终冷读审查 | `gpt-5.6-sol` | `medium` |
+| 其他工作：来源获取、PDF 提取、未改内容的确定性渲染/编译、机械主题修复、讲稿、TTS、视频、海报和投稿 | `gpt-5.6-terra` | `medium` |
+
+路由按实际判断负荷而不是文件格式或 Skill 名称决定。`paper-to-video` 默认
+直接由 Terra medium 消费已经定稿且审查通过的 Beamer；只有缺少当前内容
+审查、内容哈希变化或发现内容/布局质量问题时，才先调用 Sol medium 的
+Beamer 内容质量门。`sustech-beamer-theme-fix` 默认由 Terra 处理路径、宏、
+字体和编译故障，只有需要修改页面内容、信息密度、图文取舍或内容相关布局时
+才升级到 Sol。`beamerposter` 海报不属于演示稿内容质量门，仍使用 Terra。
+同一个已路由 worker 调用相同模型档位的 Skill 时不会递归创建子代理。
+若运行环境不能以指定模型和推理强度启动子代理，Skill 会停止并报告路由
+失败，而不会静默回退到当前会话模型。该机制需要启用 Codex subagents；
+模型路由不会扩大文件、安装、投稿或其他外部操作的授权范围。
+
+## 快速安装
+
+### 1. 克隆仓库
+
+将仓库克隆到一个稳定位置：
+
+```bash
+git clone https://github.com/xixi-cc/paper-to-video-skills.git \
+  "$HOME/.local/share/paper-to-video-skills"
+cd "$HOME/.local/share/paper-to-video-skills"
+```
+
+### 2. 让 Codex 发现这些 Skills
+
+Codex 会从 `~/.agents/skills` 发现用户级 Skills，并支持符号链接形式的 Skill 目录。下面的命令会链接全部 8 个 Skills，同时避免复制它们共用的脚本、模板和资源：
+
+```bash
+mkdir -p "$HOME/.agents/skills"
+repo_root="$HOME/.local/share/paper-to-video-skills"
+
+for skill in \
+  bilibili-video-uploader \
+  markdown-to-video-cover \
+  paper-download-arxiv-source \
+  paper-to-beamer \
+  pdf-slides-to-video \
+  paper-to-video \
+  pdf-to-markdown \
+  sustech-beamer-theme-fix
+do
+  target="$HOME/.agents/skills/$skill"
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    printf '跳过已存在路径：%s\n' "$target"
+  else
+    ln -s "$repo_root/$skill" "$target"
+  fi
+done
+```
+
+也可以让 `$skill-installer` 从 GitHub 仓库安装选定的 Skills。若新安装的 Skill 没有出现，再重启 Codex。Skill 的发现位置和调用方式以当前的
+[OpenAI Skills 构建文档](https://learn.chatgpt.com/docs/build-skills)为准。
+
+### 3. 安装运行依赖
+
+完成上述链接后，Codex 可以立即发现这些 Skills；但论文解析、TeX、音频、视频和投稿阶段仍需要独立的系统工具和 Python 环境。运行完整工作流前，请按照
+[ENVIRONMENT.md](ENVIRONMENT.md)配置环境。本仓库不提供模型、凭据、哔哩哔哩 cookies 或私有配置。
+
+## 最小示例
+
+安装 Skills 后，在包含论文的工作区中启动 Codex，并显式调用其中一个阶段：
+
+```text
+使用 $pdf-to-markdown 将 /absolute/path/to/paper.pdf 转换为结构化 Markdown。
+保持源 PDF 不变，并将输出写到论文旁边的独立目录。
+```
+
+配置好 TeX、FFmpeg、Poppler、IndexTTS2 和 G2PW 后，可以将已审核的
+Beamer 幻灯片转成视频：
+
+```text
+对 /absolute/path/to/paper-directory 使用 $paper-to-video。
+从已编译的 Beamer PDF 和 video/narrations.json 生成并验证配音视频。
+```
+
+投稿始终是可选操作，只有用户明确要求上传或发布时才会执行。
+
+## Skill 目录
+
+| Skill | 功能 |
+| --- | --- |
+| `paper-download-arxiv-source` | 下载并安全解包 arXiv TeX/原始图片，记录哈希来源契约。 |
+| `pdf-to-markdown` | 使用明确选择的本地 MinerU 或 MinerU Open API，从论文中提取结构化 Markdown、公式、表格和图片。 |
+| `paper-to-beamer` | 创建并逐页检查能够独立阅读的 SUSTech Beamer 幻灯片。 |
+| `pdf-slides-to-video` | 生成与页面对齐的讲稿和语音，并组装经过验证的 MP4。 |
+| `markdown-to-video-cover` | 创建可选的宣传海报；它不会取代 Beamer 标题页视频封面。 |
+| `bilibili-video-uploader` | 校验元数据、执行预演、上传并核验经过明确授权的投稿。 |
+| `paper-to-video` | 从 Beamer 清单和独立的逐页讲稿生成本地配音视频。 |
+| `sustech-beamer-theme-fix` | 诊断主题、资源路径、宏定义和 TeX 编译故障。 |
+
+## 许可证摘要
+
+需要在论文、报告或可复现工作流中引用本项目时，请使用
+[`CITATION.cff`](CITATION.cff) 或 [`CITATION.md`](CITATION.md)，并注明实际使用的
+release tag 或 commit hash。工具仓库的引用不能替代对生成幻灯片、视频及原始论文
+的分别引用。
+
+| 内容 | 许可证或适用条款 |
+| --- | --- |
+| 本仓库维护者独立新增或修改的原创代码和文档 | [MIT 许可证](LICENSE) |
+| 来自“白拾的物理AI组会”的原始 Skill 套件及其衍生内容 | [MIT 许可证](LICENSE)；原作者已明确书面授权修改、公开再分发并以 MIT 许可证发布，授权记录由维护者留存 |
+| `pdf-slides-to-video/assets/voices/voice-319-reference.wav` | [CC BY 4.0](VOICE_LICENSE.md) |
+| SUSTech 幻灯片模板 | MIT；再分发时须保留其[本地许可证](sustech-slides-template/LICENSE)和作者声明 |
+| 基于 Gemini 修改的 Beamer 海报主题 | MIT；参见[第三方许可证副本](third_party_licenses/GEMINI-MIT.txt) |
+| IndexTTS2 源码、模型权重及生成输出 | 适用上游单独的 Bilibili Model Use License，不属于本仓库 MIT 许可证的授权范围 |
+| 其他外部工具、模型、字体和服务 | 分别适用各自的上游条款 |
+
+再分发或部署前，请阅读 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。仓库级 MIT 许可证覆盖已获原作者授权的 Skill 套件及本仓库贡献者拥有权利的修改内容，但不会额外授予外部模型、服务、生成语音输出或上述范围以外第三方资源的使用权。
+
+## Codex 运行约定
+
+系统依赖、隔离运行环境、私有配置路径和验证命令见
+[ENVIRONMENT.md](ENVIRONMENT.md)。
+
+- 在当前工作区内运行；相邻 Skills 的位置应相对于本仓库解析。
+- 使用官方 PDF Skill 检查源文件和渲染后的页面。
+- 使用 `latex:latex-doctor` 和 `latex:latex-compile` 发现并调用 TeX 环境。
+- 使用 `uv sync --project pdf-slides-to-video` 创建视频处理环境。
+- 只使用本地 IndexTTS2、G2PW 发音审计和仓库内置参考语音 Voice 319 生成旁白。CUDA 运行环境和模型必须放在 Skill 目录之外，并通过 `~/.config/article-to-video/tts.json` 配置。
+- 新生成的视频保留 TTS 原生语速，并在 FFmpeg 合成阶段默认应用 1.25 倍播放速度；不会自动重写既有视频。
+- 通过 `PATH` 或 Codex 捆绑的工作区运行环境发现 `python`、`latexmk`、`xelatex`、`lualatex`、`pdftoppm`、`ffmpeg` 和 `ffprobe`。
+- 保持源 PDF 不变，将生成物写入明确指定的论文或输出目录。
+- 当前论文工作流在进入 `paper-to-beamer` 前先运行 `pdf-to-markdown`；对于
+  已授权远程处理的论文，显式使用 `--engine open-api`。转换器自身默认仍为
+  本地引擎，只有显式选择 `--engine open-api`
+  才会将论文提交给已配置的 MinerU 在线服务。Token 只保存在用户私有配置
+  或 `MINERU_TOKEN` 中，不进入仓库、提示词或日志命令。
+- 不要在仓库中保存凭据。哔哩哔哩 cookies 应放在 `~/.bilibili/cookies.json`。
+- 只有当前对话中明确的上传或发布请求才构成投稿授权。先预演，
+  再使用上传命令；不把生成视频视为发布授权。
+- 哔哩哔哩简介只需非空并与论文一致，不强制固定的开头、句数或段落格式。
+- 批量处理论文时，使用 `paper-to-video/scripts/batch.py`。它使用一个
+  IndexTTS2 worker，并在每篇论文的音频完成后启动该论文的视频后处理。
+- `paper_presentation.json` 只保存 Beamer 元数据、帧内容和证据定位。
+  旁白由 `video/narrations.json` 保存，投稿元数据由
+  `video/video_meta.json` 保存。
+- 每个批次只加载一次 IndexTTS2，并保持 GPU 推理串行执行。模型推理前先完成 G2PW 发音预检；标准化音频完成后发送页面和论文完成事件；一篇论文完成后立即将其交给共享后处理队列，同时后续论文继续执行 TTS。TTS 音频标准化 worker 应占用统一配置的 FFmpeg 总预算；若总预算无法同时支持两个池，则推迟后处理直至 TTS 结束。XeLaTeX 需要单独限流，不能按论文重复扩增 worker 池。
+
+## 主要输出
+
+- Beamer：`main.tex`、`main.pdf`、`figures/`、`sustech-theme/`
+- MinerU：`source/mineru/<stem>.md`、`source/mineru/images/`
+- 视频：`video_frames/`、旁白文本、MP3 音频、配音 MP4、封面和元数据
+- 可选海报：`poster.tex`、`poster.pdf`、`poster.png`
+
+每份幻灯片都必须成功编译并逐页进行视觉检查。每个视频都必须为渲染后的每一页 PDF 提供一组对应的旁白文本和音频，并通过 `ffprobe` 验证。
+
+每张实质性幻灯片即使没有旁白也应能够独立理解：页面上需要明确展示研究对象或问题、证据或机制，以及可见的核心结论。批量运行在进入 TTS 或发布前，还必须进行一次静音五秒可读性检查，确保不存在信息过于稀疏的页面。
+
+## 开发与发布验证
+
+发布改动前，在仓库根目录运行：
+
+```bash
+python3 scripts/validate_skills.py
+python3 -m unittest discover -s tests -q
+python3 scripts/check_markdown_links.py
+python3 scripts/check_python_syntax.py
+bash -n pdf-slides-to-video/scripts/setup_indextts2_runtime.sh
+```
+
+GitHub Actions 会在每次 push 和 pull request 时运行 Skill 校验、Python 语法检查和回归测试、Shell 语法检查以及本地 Markdown 链接检查。
+
+不要将 `.venv/`、缓存、凭据、模型、私有或自定义参考语音、日志和生成物加入提交。Voice 319 是仓库中唯一有意保留的音频资源。上传和撤稿命令不得用作冒烟测试。贡献流程见
+[CONTRIBUTING.md](CONTRIBUTING.md)，私密漏洞报告方式见
+[SECURITY.md](SECURITY.md)。
